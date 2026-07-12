@@ -1,6 +1,7 @@
-    import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useEffect } from 'react'
 import { useAuthStore } from '@/store/authStore'
+import AppLayout from '@/components/layout/AppLayout'
 
 // Auth screens
 import SignUp from '@/components/auth/SignUp'
@@ -28,7 +29,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-500 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-navy-700 border-t-transparent" />
       </div>
     )
   }
@@ -46,7 +47,7 @@ function AdminGate({ children }: { children: React.ReactNode }) {
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-500 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-navy-700 border-t-transparent" />
       </div>
     )
   }
@@ -66,28 +67,30 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <Routes>
-        {/* Public routes */}
-        <Route path="/signup"  element={<SignUp />} />
-        <Route path="/verify"  element={<OtpVerify />} />
-        <Route path="/signin"  element={<SignIn />} />
-        <Route path="/deeplink" element={<DeepLinkHandler />} />
+      <AppLayout>
+        <Routes>
+          {/* Public routes */}
+          <Route path="/signup"  element={<SignUp />} />
+          <Route path="/verify"  element={<OtpVerify />} />
+          <Route path="/signin"  element={<SignIn />} />
+          <Route path="/deeplink" element={<DeepLinkHandler />} />
 
-        {/* Onboarding (auth required, plan not yet required) */}
-        <Route path="/onboarding"            element={<OnboardingForm />} />
-        <Route path="/onboarding/generating" element={<PlanGenerating />} />
+          {/* Onboarding (auth required, plan not yet required) */}
+          <Route path="/onboarding"            element={<OnboardingForm />} />
+          <Route path="/onboarding/generating" element={<PlanGenerating />} />
 
-        {/* Protected app routes */}
-        <Route path="/home"          element={<AuthGate><HomeScreen /></AuthGate>} />
-        <Route path="/module/:dayIndex" element={<AuthGate><ModuleScreen /></AuthGate>} />
-        <Route path="/roadmap"       element={<AuthGate><RoadmapView /></AuthGate>} />
-        <Route path="/recap"         element={<AuthGate><WeeklyRecap /></AuthGate>} />
-        <Route path="/profile"       element={<AuthGate><ProfileScreen /></AuthGate>} />
-        <Route path="/admin"         element={<AdminGate><AdminScreen /></AdminGate>} />
+          {/* Protected app routes */}
+          <Route path="/home"             element={<AuthGate><HomeScreen /></AuthGate>} />
+          <Route path="/module/:dayIndex" element={<AuthGate><ModuleScreen /></AuthGate>} />
+          <Route path="/roadmap"          element={<AuthGate><RoadmapView /></AuthGate>} />
+          <Route path="/recap"            element={<AuthGate><WeeklyRecap /></AuthGate>} />
+          <Route path="/profile"          element={<AuthGate><ProfileScreen /></AuthGate>} />
+          <Route path="/admin"            element={<AdminGate><AdminScreen /></AdminGate>} />
 
-        {/* Default redirect */}
-        <Route path="*" element={<Navigate to="/home" replace />} />
-      </Routes>
+          {/* Default redirect */}
+          <Route path="*" element={<Navigate to="/home" replace />} />
+        </Routes>
+      </AppLayout>
     </BrowserRouter>
   )
 }

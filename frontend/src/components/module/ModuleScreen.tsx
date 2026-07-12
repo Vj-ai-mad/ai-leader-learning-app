@@ -67,10 +67,10 @@ export default function ModuleScreen() {
   return (
     <div className="min-h-screen bg-white safe-top safe-bottom">
       {/* Header */}
-      <header className="sticky top-0 z-10 flex items-center gap-3 bg-white px-4 py-3 shadow-sm">
+      <header className="sticky top-0 z-10 flex items-center gap-3 bg-navy-700 px-4 py-3">
         <button
           onClick={() => navigate('/home')}
-          className="rounded-md p-1 text-gray-600 hover:bg-gray-100"
+          className="rounded-md p-1 text-white/70 hover:text-white"
           aria-label="Back to home"
         >
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -78,7 +78,7 @@ export default function ModuleScreen() {
           </svg>
         </button>
         <div className="flex-1">
-          <span className="text-xs text-gray-500">
+          <span className="text-xs text-white/70">
             {module.stageLabel} · Day {module.dayIndex + 1}
           </span>
         </div>
