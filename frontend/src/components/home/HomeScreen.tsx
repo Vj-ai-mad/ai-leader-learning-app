@@ -141,7 +141,7 @@ export default function HomeScreen() {
             {/* Primary CTA button */}
             <button
               onClick={() => navigate(`/module/${module.dayIndex}`)}
-              className="mt-4 w-full rounded-lg bg-navy-700 px-4 py-3 text-sm font-medium text-white hover:bg-navy-800 transition"
+              className="mt-4 w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-700 transition"
             >
               Start Today's Module
             </button>

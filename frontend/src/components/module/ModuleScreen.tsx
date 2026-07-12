@@ -65,7 +65,7 @@ export default function ModuleScreen() {
   }
 
   return (
-    <div className="min-h-screen bg-white safe-top safe-bottom">
+    <div className="min-h-screen bg-white safe-top safe-bottom pb-24">
       {/* Header */}
       <header className="sticky top-0 z-10 flex items-center gap-3 bg-navy-700 px-4 py-3">
         <button
@@ -120,7 +120,7 @@ export default function ModuleScreen() {
           <button
             onClick={handleMarkDone}
             disabled={completing}
-            className="mt-6 w-full rounded-md bg-green-600 px-4 py-3 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+            className="mt-6 w-full rounded-lg bg-green-600 px-4 py-3 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 transition"
           >
             {completing ? 'Marking...' : 'Mark as Done'}
           </button>
