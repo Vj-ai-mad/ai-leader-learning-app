@@ -1,0 +1,7 @@
+{
+  "value": {"S": "jvijay79@yahoo.com"},
+  "type": {"S": "email"},
+  "note": {"S": "test user"},
+  "addedAt": {"S": "2026-07-12T00:00:00Z"},
+  "addedBy": {"S": "admin"}
+}

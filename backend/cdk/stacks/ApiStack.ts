@@ -66,7 +66,7 @@ export class ApiStack extends cdk.Stack {
     // ── Lambda: Auth (unauthenticated) ──────────────────────────────────────
     const checkAllowListFn = new lambda.Function(this, 'CheckAllowListFn', {
       runtime: lambda.Runtime.NODEJS_20_X,
-      handler: 'preSignUp.handler',
+      handler: 'checkAllowList.handler',
       code: lambda.Code.fromAsset(path.join(functionsRoot, 'auth')),
       environment: commonEnv
     })
