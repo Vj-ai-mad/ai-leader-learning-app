@@ -6,6 +6,7 @@ import { useAuthStore } from '@/store/authStore'
 import SignUp from '@/components/auth/SignUp'
 import OtpVerify from '@/components/auth/OtpVerify'
 import SignIn from '@/components/auth/SignIn'
+import DeepLinkHandler from '@/components/auth/DeepLinkHandler'
 
 // Onboarding
 import OnboardingForm from '@/components/onboarding/OnboardingForm'
@@ -19,7 +20,6 @@ const RoadmapView    = () => <div className="p-6">Roadmap — coming in Phase 6<
 const WeeklyRecap    = () => <div className="p-6">Weekly Recap — coming in Phase 6</div>
 const ProfileScreen  = () => <div className="p-6">Profile — coming in Phase 6</div>
 const ModuleScreen   = () => <div className="p-6">Module — coming in Phase 5</div>
-const DeepLinkHandler = () => <div className="p-6">Deep link — coming in Phase 2</div>
 const AdminScreen    = () => <div className="p-6">Admin — coming in Phase 8</div>
 
 function AuthGate({ children }: { children: React.ReactNode }) {
