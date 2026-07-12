@@ -8,7 +8,7 @@ import { randomUUID } from 'crypto'
 const USERS_TABLE = process.env.USERS_TABLE ?? 'ai-leader-users'
 const PLANS_TABLE = process.env.PLANS_TABLE ?? 'ai-leader-plans'
 const CONTENT_TABLE = process.env.CONTENT_TABLE ?? 'ai-leader-content'
-const MODEL_ID = process.env.BEDROCK_MODEL_ID ?? 'anthropic.claude-3-haiku-20240307-v1:0'
+const MODEL_ID = process.env.BEDROCK_MODEL_ID ?? 'us.anthropic.claude-sonnet-4-20250514-v1:0'
 
 interface ContentItem {
   contentId: string
@@ -54,9 +54,9 @@ export async function handler(event: unknown): Promise<APIGatewayProxyResultV2 |
     // 2. Scan content library (active + reviewed)
     const contentResult = await docClient.send(new ScanCommand({
       TableName: CONTENT_TABLE,
-      FilterExpression: '#active = :true AND reviewedByAdmin = :true',
+      FilterExpression: '#active = :activeVal AND reviewedByAdmin = :true',
       ExpressionAttributeNames: { '#active': 'active' },
-      ExpressionAttributeValues: { ':true': true }
+      ExpressionAttributeValues: { ':activeVal': 'true', ':true': true }
     }))
     const contentItems = (contentResult.Items ?? []) as ContentItem[]
 
