@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+cdk.out/
+*.js
+*.d.ts
+!jest.config.js
+!vite.config.js
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# CDK
+cdk.context.json
+
+# Editor
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Amplify
+amplify/.config/local-*
+amplify/logs/
+amplify/mock-data/
+amplify/#current-cloud-backend/
+
+# Test coverage
+coverage/

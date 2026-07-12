@@ -1,0 +1,26 @@
+{
+  "name": "ai-leader-learning-app-backend",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "tsc",
+    "cdk": "cdk",
+    "deploy": "cdk deploy --all --require-approval never",
+    "synth": "cdk synth"
+  },
+  "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.614.0",
+    "@aws-sdk/client-cognito-identity-provider": "^3.614.0",
+    "@aws-sdk/client-dynamodb": "^3.614.0",
+    "@aws-sdk/client-secrets-manager": "^3.614.0",
+    "@aws-sdk/lib-dynamodb": "^3.614.0",
+    "aws-cdk-lib": "^2.150.0",
+    "constructs": "^10.3.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.143",
+    "@types/node": "^20.14.11",
+    "aws-cdk": "^2.150.0",
+    "typescript": "^5.5.3"
+  }
+}
