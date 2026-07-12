@@ -33,7 +33,7 @@ export class ApiStack extends cdk.Stack {
       ALLOWLIST_TABLE: props.allowListTable.tableName,
       DEEPLINK_TOKENS_TABLE: props.deepLinkTokensTable.tableName,
       BEDROCK_REGION: 'us-east-1',
-      BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-20250514-v1:0',
+      BEDROCK_MODEL_ID: 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
       COGNITO_USER_POOL_ID: props.userPool.userPoolId,
       COGNITO_USER_POOL_CLIENT_ID: props.userPoolClient.userPoolClientId,
       APP_BASE_URL: 'https://REPLACE_AFTER_DEPLOY',
