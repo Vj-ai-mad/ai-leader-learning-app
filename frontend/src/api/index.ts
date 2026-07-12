@@ -1,35 +1,58 @@
 /**
- * Typed API wrappers around Amplify REST API calls.
- * All authenticated routes pass the Cognito JWT automatically via Amplify.
+ * Typed API wrappers using fetch + Cognito JWT from Amplify session.
  */
-import { get, post, put, patch, del } from 'aws-amplify/api'
-import type {
-  ModuleResponse,
-  ProgressResponse,
-  UserProfile,
-  PlanStatus
-} from '@/types'
+import { fetchAuthSession } from 'aws-amplify/auth'
+import type { ModuleResponse, ProgressResponse, UserProfile, PlanStatus } from '@/types'
 
-const API_NAME = 'api'
+const BASE_URL = import.meta.env.VITE_API_ENDPOINT ?? ''
+
+async function getToken(): Promise<string | null> {
+  try {
+    const session = await fetchAuthSession()
+    return session.tokens?.idToken?.toString() ?? null
+  } catch {
+    return null
+  }
+}
+
+async function apiCall(path: string, options: RequestInit = {}) {
+  const token = await getToken()
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string> ?? {})
+  }
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+
+  const res = await fetch(`${BASE_URL}${path}`, { ...options, headers })
+
+  if (!res.ok) {
+    const body = await res.text()
+    throw new Error(body || `HTTP ${res.status}`)
+  }
+
+  return res.json()
+}
 
 // ─── Auth (unauthenticated) ────────────────────────────────────────────────
 
 export async function checkAllowList(email: string, phone: string) {
-  const { body } = await post({
-    apiName: API_NAME,
-    path: '/auth/check-allowlist',
-    options: { body: { email, phone } as unknown as ReadableStream }
-  }).response
-  return body.json()
+  const res = await fetch(`${BASE_URL}/auth/check-allowlist`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, phone })
+  })
+  return res.json()
 }
 
 export async function exchangeDeepLinkToken(token: string) {
-  const { body } = await post({
-    apiName: API_NAME,
-    path: '/auth/deeplink/exchange',
-    options: { body: { token } as unknown as ReadableStream }
-  }).response
-  return body.json()
+  const res = await fetch(`${BASE_URL}/auth/deeplink/exchange`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token })
+  })
+  return res.json()
 }
 
 // ─── Onboarding ────────────────────────────────────────────────────────────
@@ -41,12 +64,7 @@ export async function submitOnboarding(data: {
   dailyMinutes: number
   activeDays: string[]
 }): Promise<{ planStatus: PlanStatus }> {
-  const { body } = await post({
-    apiName: API_NAME,
-    path: '/onboarding',
-    options: { body: data as unknown as ReadableStream }
-  }).response
-  return body.json() as Promise<{ planStatus: PlanStatus }>
+  return apiCall('/onboarding', { method: 'POST', body: JSON.stringify(data) })
 }
 
 // ─── Plan ──────────────────────────────────────────────────────────────────
@@ -56,112 +74,68 @@ export async function getPlanStatus(): Promise<{
   currentDayIndex: number
   totalDays: number
 }> {
-  const { body } = await get({
-    apiName: API_NAME,
-    path: '/plan/status'
-  }).response
-  return body.json() as Promise<{ planStatus: PlanStatus; currentDayIndex: number; totalDays: number }>
+  return apiCall('/plan/status')
 }
 
 // ─── Modules ───────────────────────────────────────────────────────────────
 
 export async function getTodayModule(): Promise<ModuleResponse> {
-  const { body } = await get({ apiName: API_NAME, path: '/module/today' }).response
-  return body.json() as Promise<ModuleResponse>
+  return apiCall('/module/today')
 }
 
 export async function getModule(dayIndex: number): Promise<ModuleResponse> {
-  const { body } = await get({ apiName: API_NAME, path: `/module/${dayIndex}` }).response
-  return body.json() as Promise<ModuleResponse>
+  return apiCall(`/module/${dayIndex}`)
 }
 
 export async function completeModule(dayIndex: number): Promise<{
   streakCount: number
   currentDayIndex: number
 }> {
-  const { body } = await post({
-    apiName: API_NAME,
-    path: `/module/${dayIndex}/complete`,
-    options: { body: {} as unknown as ReadableStream }
-  }).response
-  return body.json() as Promise<{ streakCount: number; currentDayIndex: number }>
+  return apiCall(`/module/${dayIndex}/complete`, { method: 'POST' })
 }
 
 // ─── Progress ──────────────────────────────────────────────────────────────
 
 export async function getProgress(): Promise<ProgressResponse> {
-  const { body } = await get({ apiName: API_NAME, path: '/progress' }).response
-  return body.json() as Promise<ProgressResponse>
+  return apiCall('/progress')
 }
 
 export async function setPauseState(paused: boolean) {
-  const { body } = await patch({
-    apiName: API_NAME,
-    path: '/progress/pause',
-    options: { body: { paused } as unknown as ReadableStream }
-  }).response
-  return body.json()
+  return apiCall('/progress/pause', { method: 'PATCH', body: JSON.stringify({ paused }) })
 }
 
 // ─── Profile ───────────────────────────────────────────────────────────────
 
 export async function getProfile(): Promise<UserProfile> {
-  const { body } = await get({ apiName: API_NAME, path: '/profile' }).response
-  return body.json() as Promise<UserProfile>
+  return apiCall('/profile')
 }
 
 export async function setNotifOptOut(notifOptOut: boolean) {
-  const { body } = await patch({
-    apiName: API_NAME,
-    path: '/profile/notifications',
-    options: { body: { notifOptOut } as unknown as ReadableStream }
-  }).response
-  return body.json()
+  return apiCall('/profile/notifications', { method: 'PATCH', body: JSON.stringify({ notifOptOut }) })
 }
 
 // ─── Admin ─────────────────────────────────────────────────────────────────
 
 export async function adminListContent() {
-  const { body } = await get({ apiName: API_NAME, path: '/admin/content' }).response
-  return body.json()
+  return apiCall('/admin/content')
 }
 
 export async function adminUpsertContent(contentId: string, data: Record<string, unknown>) {
-  const { body } = await put({
-    apiName: API_NAME,
-    path: `/admin/content/${contentId}`,
-    options: { body: data as unknown as ReadableStream }
-  }).response
-  return body.json()
+  return apiCall(`/admin/content/${contentId}`, { method: 'PUT', body: JSON.stringify(data) })
 }
 
 export async function adminGenerateSummary(contentId: string) {
-  const { body } = await post({
-    apiName: API_NAME,
-    path: `/admin/content/${contentId}/summarise`,
-    options: { body: {} as unknown as ReadableStream }
-  }).response
-  return body.json()
+  return apiCall(`/admin/content/${contentId}/summarise`, { method: 'POST' })
 }
 
 export async function adminListAllowList() {
-  const { body } = await get({ apiName: API_NAME, path: '/admin/allowlist' }).response
-  return body.json()
+  return apiCall('/admin/allowlist')
 }
 
 export async function adminAddAllowList(value: string, type: 'email' | 'phone', note: string) {
-  const { body } = await post({
-    apiName: API_NAME,
-    path: '/admin/allowlist',
-    options: { body: { value, type, note } as unknown as ReadableStream }
-  }).response
-  return body.json()
+  return apiCall('/admin/allowlist', { method: 'POST', body: JSON.stringify({ value, type, note }) })
 }
 
 export async function adminDeleteAllowList(value: string) {
-  const { body } = await del({
-    apiName: API_NAME,
-    path: `/admin/allowlist/${encodeURIComponent(value)}`
-  }).response
-  return body.json()
+  return apiCall(`/admin/allowlist/${encodeURIComponent(value)}`, { method: 'DELETE' })
 }
