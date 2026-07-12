@@ -1,40 +1,39 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda'
 import { GetCommand, PutCommand, UpdateCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
-import { InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
 import { docClient } from '../shared/dynamodb'
-import { bedrockClient } from '../shared/bedrock'
 import { randomUUID } from 'crypto'
 
 const USERS_TABLE = process.env.USERS_TABLE ?? 'ai-leader-users'
 const PLANS_TABLE = process.env.PLANS_TABLE ?? 'ai-leader-plans'
 const CONTENT_TABLE = process.env.CONTENT_TABLE ?? 'ai-leader-content'
-const MODEL_ID = process.env.BEDROCK_MODEL_ID ?? 'us.anthropic.claude-sonnet-4-20250514-v1:0'
 
 interface ContentItem {
   contentId: string
   title: string
   stage: number
-  roleRelevance: string[]
+  roleRelevance: string[] | Set<string>
   format: string
   estimatedMinutes: number
-  tags: string[]
-}
-
-interface GeneratedDay {
-  dayIndex: number
-  stageNumber: number
-  contentId: string
+  tags: string[] | Set<string>
   aiSummary: string
 }
 
-// Can be invoked async (from submitOnboarding) or via GET /plan/status
+/**
+ * Plan generation strategy (cost-optimized):
+ * 1. Read all seeded content items from DynamoDB (already have aiSummary)
+ * 2. Filter by user's dailyMinutes budget and role relevance
+ * 3. Sequence items in stage order (1->2->3->4->5)
+ * 4. Use the pre-existing aiSummary from each content item — NO Bedrock call
+ *
+ * This approach costs $0 per plan generation (only DynamoDB reads).
+ * Bedrock was already used once during seed to generate the summaries.
+ */
+
 export async function handler(event: unknown): Promise<APIGatewayProxyResultV2 | void> {
-  // If it's an API Gateway event with GET method, return plan status
   if (isApiEvent(event) && event.requestContext.http.method === 'GET') {
     return handleStatusCheck(event)
   }
 
-  // Otherwise it's an async invocation for plan generation
   const payload = event as { userId: string }
   const userId = payload.userId
   if (!userId) {
@@ -58,48 +57,50 @@ export async function handler(event: unknown): Promise<APIGatewayProxyResultV2 |
       ExpressionAttributeNames: { '#active': 'active' },
       ExpressionAttributeValues: { ':activeVal': 'true', ':true': true }
     }))
-    const contentItems = (contentResult.Items ?? []) as ContentItem[]
+    const allItems = (contentResult.Items ?? []) as ContentItem[]
 
-    if (contentItems.length < 42) {
-      console.error(`[generatePlan] Only ${contentItems.length} content items available (need 42+)`)
+    if (allItems.length < 42) {
+      console.error(`[generatePlan] Only ${allItems.length} content items (need 42+)`)
       await setUserPlanStatus(userId, 'error')
       return
     }
 
-    // 3. Build Bedrock prompt
-    const prompt = buildPrompt(user, contentItems)
+    // 3. Filter by user's time budget
+    const dailyMinutes = user.dailyMinutes ?? 25
+    const userRole = user.role ?? 'General'
 
-    // 4. Call Bedrock
-    const bedrockResponse = await bedrockClient.send(new InvokeModelCommand({
-      modelId: MODEL_ID,
-      contentType: 'application/json',
-      accept: 'application/json',
-      body: JSON.stringify({
-        anthropic_version: 'bedrock-2023-05-31',
-        max_tokens: 8192,
-        messages: [
-          { role: 'user', content: prompt }
-        ],
-        system: buildSystemPrompt()
-      })
-    }))
+    const eligible = allItems.filter(
+      item => item.estimatedMinutes <= dailyMinutes
+    )
 
-    const responseBody = JSON.parse(new TextDecoder().decode(bedrockResponse.body))
-    const assistantText = responseBody.content?.[0]?.text ?? ''
+    // 4. Sort by stage order, prioritize role-relevant items
+    const sorted = eligible.sort((a, b) => {
+      if (a.stage !== b.stage) return a.stage - b.stage
+      const aRelevant = hasRole(a.roleRelevance, userRole) ? 0 : 1
+      const bRelevant = hasRole(b.roleRelevance, userRole) ? 0 : 1
+      return aRelevant - bRelevant
+    })
 
-    // 5. Parse JSON from response
-    const jsonMatch = assistantText.match(/\[[\s\S]*\]/)
-    if (!jsonMatch) throw new Error('No JSON array found in Bedrock response')
+    // 5. Take 42-46 items (all available up to 56 max)
+    const planItems = sorted.slice(0, Math.min(sorted.length, 56))
 
-    const days: GeneratedDay[] = JSON.parse(jsonMatch[0])
-
-    if (!Array.isArray(days) || days.length < 42) {
-      throw new Error(`Plan too short: ${days.length} days (need 42+)`)
+    if (planItems.length < 42) {
+      console.error(`[generatePlan] Only ${planItems.length} eligible items after filtering`)
+      await setUserPlanStatus(userId, 'error')
+      return
     }
 
-    // 6. Write plan to DynamoDB
+    // 6. Build plan using pre-existing aiSummary — NO Bedrock call
     const planId = randomUUID()
     const now = new Date().toISOString()
+
+    const days = planItems.map((item, i) => ({
+      dayIndex: i,
+      stageNumber: item.stage,
+      contentId: item.contentId,
+      aiSummary: item.aiSummary || `Learn about: ${item.title}`,
+      completedAt: null
+    }))
 
     await docClient.send(new PutCommand({
       TableName: PLANS_TABLE,
@@ -108,13 +109,7 @@ export async function handler(event: unknown): Promise<APIGatewayProxyResultV2 |
         userId,
         generatedAt: now,
         totalDays: days.length,
-        days: days.map((d, i) => ({
-          dayIndex: i,
-          stageNumber: d.stageNumber,
-          contentId: d.contentId,
-          aiSummary: d.aiSummary,
-          completedAt: null
-        }))
+        days
       }
     }))
 
@@ -122,23 +117,24 @@ export async function handler(event: unknown): Promise<APIGatewayProxyResultV2 |
     await docClient.send(new UpdateCommand({
       TableName: USERS_TABLE,
       Key: { userId },
-      UpdateExpression: 'SET planId = :planId, planStatus = :active, currentDayIndex = :zero, updatedAt = :now',
+      UpdateExpression: 'SET planId = :planId, planStatus = :active, currentDayIndex = :zero, totalDays = :total, updatedAt = :now',
       ExpressionAttributeValues: {
         ':planId': planId,
         ':active': 'active',
         ':zero': 0,
+        ':total': days.length,
         ':now': now
       }
     }))
 
-    console.log(`[generatePlan] Success: planId=${planId}, ${days.length} days for user ${userId}`)
+    console.log(`[generatePlan] Success: planId=${planId}, ${days.length} days for user ${userId} (no Bedrock call — used pre-seeded summaries)`)
   } catch (err) {
     console.error('[generatePlan] Error:', err)
     await setUserPlanStatus(userId, 'error')
   }
 }
 
-// ── Status check handler (GET /plan/status) ────────────────────────────────
+// ── Status check (GET /plan/status) ────────────────────────────────────────
 
 async function handleStatusCheck(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
   const userId = event.requestContext.authorizer?.jwt?.claims?.sub as string
@@ -161,37 +157,11 @@ async function handleStatusCheck(event: APIGatewayProxyEventV2): Promise<APIGate
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function buildSystemPrompt(): string {
-  return `You are a learning plan designer for delivery leaders. You create day-by-day AI literacy learning plans using a curated content library. Each plan covers 6-8 weeks. Respond only with a valid JSON array matching the schema provided. Do not include any other text.`
-}
-
-function buildPrompt(user: Record<string, unknown>, items: ContentItem[]): string {
-  const itemList = items.map(i => ({
-    contentId: i.contentId,
-    title: i.title,
-    stage: i.stage,
-    roleRelevance: i.roleRelevance,
-    format: i.format,
-    estimatedMinutes: i.estimatedMinutes,
-    tags: i.tags
-  }))
-
-  return `Learner profile:
-- Role: ${user.role}
-- Responsibilities: ${user.responsibilities || 'Not specified'}
-- 5-year goal: ${user.careerGoal || 'Not specified'}
-- Daily time available: ${user.dailyMinutes} minutes
-
-Content library (JSON array):
-${JSON.stringify(itemList)}
-
-Instructions:
-1. Select and sequence content items across all 5 stages in order (1 then 2 then 3 then 4 then 5)
-2. Prioritise items where roleRelevance includes "${user.role}" or "General"
-3. Each day gets exactly one item whose estimatedMinutes <= ${user.dailyMinutes}
-4. Generate 42-56 days total
-5. For each selected item write an original aiSummary of 300-400 words that orients the learner without reproducing the source text
-6. Return ONLY a JSON array: [{"dayIndex":0,"stageNumber":1,"contentId":"...","aiSummary":"..."},...]`
+function hasRole(roleRelevance: string[] | Set<string>, role: string): boolean {
+  if (roleRelevance instanceof Set) {
+    return roleRelevance.has(role) || roleRelevance.has('General')
+  }
+  return roleRelevance.includes(role) || roleRelevance.includes('General')
 }
 
 async function setUserPlanStatus(userId: string, status: string) {
