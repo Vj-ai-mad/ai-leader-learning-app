@@ -12,14 +12,14 @@ import DeepLinkHandler from '@/components/auth/DeepLinkHandler'
 import OnboardingForm from '@/components/onboarding/OnboardingForm'
 import PlanGenerating from '@/components/onboarding/PlanGenerating'
 
-// App screens (stubs — implemented in later phases)
+// App screens
 import HomeScreen from '@/components/home/HomeScreen'
+import ModuleScreen from '@/components/module/ModuleScreen'
 
 // Placeholder stubs for routes not yet implemented
 const RoadmapView    = () => <div className="p-6">Roadmap — coming in Phase 6</div>
 const WeeklyRecap    = () => <div className="p-6">Weekly Recap — coming in Phase 6</div>
 const ProfileScreen  = () => <div className="p-6">Profile — coming in Phase 6</div>
-const ModuleScreen   = () => <div className="p-6">Module — coming in Phase 5</div>
 const AdminScreen    = () => <div className="p-6">Admin — coming in Phase 8</div>
 
 function AuthGate({ children }: { children: React.ReactNode }) {
