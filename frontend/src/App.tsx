@@ -40,6 +40,23 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+function AdminGate({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isAdmin, isLoading } = useAuthStore()
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-500 border-t-transparent" />
+      </div>
+    )
+  }
+
+  if (!isAuthenticated) return <Navigate to="/signin" replace />
+  if (!isAdmin) return <Navigate to="/home" replace />
+
+  return <>{children}</>
+}
+
 export default function App() {
   const { init } = useAuthStore()
 
@@ -66,7 +83,7 @@ export default function App() {
         <Route path="/roadmap"       element={<AuthGate><RoadmapView /></AuthGate>} />
         <Route path="/recap"         element={<AuthGate><WeeklyRecap /></AuthGate>} />
         <Route path="/profile"       element={<AuthGate><ProfileScreen /></AuthGate>} />
-        <Route path="/admin"         element={<AuthGate><AdminScreen /></AuthGate>} />
+        <Route path="/admin"         element={<AdminGate><AdminScreen /></AdminGate>} />
 
         {/* Default redirect */}
         <Route path="*" element={<Navigate to="/home" replace />} />
