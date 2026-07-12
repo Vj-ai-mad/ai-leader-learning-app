@@ -35,7 +35,7 @@ export class NotificationStack extends cdk.Stack {
       environment: commonEnv
     })
 
-    props.usersTable.grantScan(sendDailyFn)
+    props.usersTable.grant(sendDailyFn, 'dynamodb:Scan')
     props.plansTable.grantReadData(sendDailyFn)
     props.deepLinkTokensTable.grantWriteData(sendDailyFn)
     sendDailyFn.addToRolePolicy(new iam.PolicyStatement({
@@ -54,7 +54,7 @@ export class NotificationStack extends cdk.Stack {
       environment: commonEnv
     })
 
-    props.usersTable.grantScan(sendWeeklyFn)
+    props.usersTable.grant(sendWeeklyFn, 'dynamodb:Scan')
     props.plansTable.grantReadData(sendWeeklyFn)
     sendWeeklyFn.addToRolePolicy(new iam.PolicyStatement({
       actions: ['secretsmanager:GetSecretValue'],
