@@ -2,6 +2,7 @@ import * as cdk from 'aws-cdk-lib'
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2'
 import * as apigwv2Int from 'aws-cdk-lib/aws-apigatewayv2-integrations'
 import * as apigwv2Auth from 'aws-cdk-lib/aws-apigatewayv2-authorizers'
+import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs'
 import * as lambda from 'aws-cdk-lib/aws-lambda'
 import * as cognito from 'aws-cdk-lib/aws-cognito'
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb'
@@ -25,7 +26,6 @@ export class ApiStack extends cdk.Stack {
 
     const functionsRoot = path.join(__dirname, '../../functions')
 
-    // Common environment variables for all Lambdas
     const commonEnv: Record<string, string> = {
       USERS_TABLE: props.usersTable.tableName,
       PLANS_TABLE: props.plansTable.tableName,
@@ -40,150 +40,73 @@ export class ApiStack extends cdk.Stack {
       DEEPLINK_JWT_SECRET: 'REPLACE_WITH_SECRET'
     }
 
+    const nodejsProps = {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      environment: commonEnv,
+      bundling: { minify: true, sourceMap: true }
+    }
+
     // ── HTTP API ───────────────────────────────────────────────────────────
     const httpApi = new apigwv2.HttpApi(this, 'HttpApi', {
       apiName: 'ai-leader-api',
       corsPreflight: {
-        allowOrigins: ['*'], // Tighten to APP_BASE_URL after deploy
-        allowMethods: [
-          apigwv2.CorsHttpMethod.GET,
-          apigwv2.CorsHttpMethod.POST,
-          apigwv2.CorsHttpMethod.PUT,
-          apigwv2.CorsHttpMethod.PATCH,
-          apigwv2.CorsHttpMethod.DELETE,
-          apigwv2.CorsHttpMethod.OPTIONS
-        ],
+        allowOrigins: ['*'],
+        allowMethods: [apigwv2.CorsHttpMethod.GET, apigwv2.CorsHttpMethod.POST, apigwv2.CorsHttpMethod.PUT, apigwv2.CorsHttpMethod.PATCH, apigwv2.CorsHttpMethod.DELETE, apigwv2.CorsHttpMethod.OPTIONS],
         allowHeaders: ['Authorization', 'Content-Type']
       }
     })
 
-    // ── JWT Authorizer ─────────────────────────────────────────────────────
-    const jwtAuth = new apigwv2Auth.HttpJwtAuthorizer(
-      'CognitoAuth',
-      `https://cognito-idp.ap-south-1.amazonaws.com/${props.userPool.userPoolId}`,
-      { jwtAudience: [props.userPoolClient.userPoolClientId] }
-    )
-    // ── Lambda: Auth (unauthenticated) ──────────────────────────────────────
-    const checkAllowListFn = new lambda.Function(this, 'CheckAllowListFn', {
-      runtime: lambda.Runtime.NODEJS_20_X,
-      handler: 'checkAllowList.handler',
-      code: lambda.Code.fromAsset(path.join(functionsRoot, 'auth')),
-      environment: commonEnv
-    })
+    const jwtAuth = new apigwv2Auth.HttpJwtAuthorizer('CognitoAuth', `https://cognito-idp.ap-south-1.amazonaws.com/${props.userPool.userPoolId}`, { jwtAudience: [props.userPoolClient.userPoolClientId] })
+
+    // ── Lambdas ────────────────────────────────────────────────────────────
+    const checkAllowListFn = new NodejsFunction(this, 'CheckAllowListFn', { ...nodejsProps, entry: path.join(functionsRoot, 'auth/checkAllowList.ts') })
     props.allowListTable.grantReadData(checkAllowListFn)
 
-    const deepLinkExchangeFn = new lambda.Function(this, 'DeepLinkExchangeFn', {
-      runtime: lambda.Runtime.NODEJS_20_X,
-      handler: 'deepLinkExchange.handler',
-      code: lambda.Code.fromAsset(path.join(functionsRoot, 'auth')),
-      environment: commonEnv
-    })
+    const deepLinkExchangeFn = new NodejsFunction(this, 'DeepLinkExchangeFn', { ...nodejsProps, entry: path.join(functionsRoot, 'auth/deepLinkExchange.ts') })
     props.deepLinkTokensTable.grantReadWriteData(deepLinkExchangeFn)
     props.usersTable.grantReadData(deepLinkExchangeFn)
-    deepLinkExchangeFn.addToRolePolicy(new iam.PolicyStatement({
-      actions: ['cognito-idp:AdminInitiateAuth'],
-      resources: [props.userPool.userPoolArn]
-    }))
+    deepLinkExchangeFn.addToRolePolicy(new iam.PolicyStatement({ actions: ['cognito-idp:AdminInitiateAuth'], resources: [props.userPool.userPoolArn] }))
 
-    // ── Lambda: Onboarding ─────────────────────────────────────────────────
-    const submitOnboardingFn = new lambda.Function(this, 'SubmitOnboardingFn', {
-      runtime: lambda.Runtime.NODEJS_20_X,
-      handler: 'submitOnboarding.handler',
-      code: lambda.Code.fromAsset(path.join(functionsRoot, 'onboarding')),
-      environment: commonEnv
-    })
+    const submitOnboardingFn = new NodejsFunction(this, 'SubmitOnboardingFn', { ...nodejsProps, entry: path.join(functionsRoot, 'onboarding/submitOnboarding.ts') })
     props.usersTable.grantReadWriteData(submitOnboardingFn)
 
-    // ── Lambda: Plan Generation ────────────────────────────────────────────
-    const generatePlanFn = new lambda.Function(this, 'GeneratePlanFn', {
-      runtime: lambda.Runtime.NODEJS_20_X,
-      handler: 'generatePlan.handler',
-      code: lambda.Code.fromAsset(path.join(functionsRoot, 'plan')),
-      timeout: cdk.Duration.minutes(2),
-      memorySize: 512,
-      environment: commonEnv
-    })
+    const generatePlanFn = new NodejsFunction(this, 'GeneratePlanFn', { ...nodejsProps, entry: path.join(functionsRoot, 'plan/generatePlan.ts'), timeout: cdk.Duration.minutes(2), memorySize: 512 })
     props.usersTable.grantReadWriteData(generatePlanFn)
     props.plansTable.grantReadWriteData(generatePlanFn)
     props.contentTable.grantReadData(generatePlanFn)
-    generatePlanFn.addToRolePolicy(new iam.PolicyStatement({
-      actions: ['bedrock:InvokeModel'],
-      resources: ['*']
-    }))
+    generatePlanFn.addToRolePolicy(new iam.PolicyStatement({ actions: ['bedrock:InvokeModel'], resources: ['*'] }))
     submitOnboardingFn.addEnvironment('GENERATE_PLAN_FN', generatePlanFn.functionName)
     generatePlanFn.grantInvoke(submitOnboardingFn)
 
-    // ── Lambda: Module ─────────────────────────────────────────────────────
-    const getModuleFn = new lambda.Function(this, 'GetModuleFn', {
-      runtime: lambda.Runtime.NODEJS_20_X,
-      handler: 'getModule.handler',
-      code: lambda.Code.fromAsset(path.join(functionsRoot, 'module')),
-      environment: commonEnv
-    })
+    const getModuleFn = new NodejsFunction(this, 'GetModuleFn', { ...nodejsProps, entry: path.join(functionsRoot, 'module/getModule.ts') })
     props.usersTable.grantReadData(getModuleFn)
     props.plansTable.grantReadData(getModuleFn)
     props.contentTable.grantReadData(getModuleFn)
 
-    const completeModuleFn = new lambda.Function(this, 'CompleteModuleFn', {
-      runtime: lambda.Runtime.NODEJS_20_X,
-      handler: 'completeModule.handler',
-      code: lambda.Code.fromAsset(path.join(functionsRoot, 'module')),
-      environment: commonEnv
-    })
+    const completeModuleFn = new NodejsFunction(this, 'CompleteModuleFn', { ...nodejsProps, entry: path.join(functionsRoot, 'module/completeModule.ts') })
     props.usersTable.grantReadWriteData(completeModuleFn)
     props.plansTable.grantReadWriteData(completeModuleFn)
-    // ── Lambda: Progress ───────────────────────────────────────────────────
-    const getProgressFn = new lambda.Function(this, 'GetProgressFn', {
-      runtime: lambda.Runtime.NODEJS_20_X,
-      handler: 'getProgress.handler',
-      code: lambda.Code.fromAsset(path.join(functionsRoot, 'progress')),
-      environment: commonEnv
-    })
+
+    const getProgressFn = new NodejsFunction(this, 'GetProgressFn', { ...nodejsProps, entry: path.join(functionsRoot, 'progress/getProgress.ts') })
     props.usersTable.grantReadData(getProgressFn)
     props.plansTable.grantReadData(getProgressFn)
 
-    const setPauseStateFn = new lambda.Function(this, 'SetPauseStateFn', {
-      runtime: lambda.Runtime.NODEJS_20_X,
-      handler: 'setPauseState.handler',
-      code: lambda.Code.fromAsset(path.join(functionsRoot, 'progress')),
-      environment: commonEnv
-    })
+    const setPauseStateFn = new NodejsFunction(this, 'SetPauseStateFn', { ...nodejsProps, entry: path.join(functionsRoot, 'progress/setPauseState.ts') })
     props.usersTable.grantReadWriteData(setPauseStateFn)
 
-    // ── Lambda: Admin ──────────────────────────────────────────────────────
-    const upsertContentFn = new lambda.Function(this, 'UpsertContentFn', {
-      runtime: lambda.Runtime.NODEJS_20_X,
-      handler: 'upsertContent.handler',
-      code: lambda.Code.fromAsset(path.join(functionsRoot, 'admin')),
-      environment: commonEnv
-    })
+    const upsertContentFn = new NodejsFunction(this, 'UpsertContentFn', { ...nodejsProps, entry: path.join(functionsRoot, 'admin/upsertContent.ts') })
     props.contentTable.grantReadWriteData(upsertContentFn)
 
-    const generateSummaryFn = new lambda.Function(this, 'GenerateSummaryFn', {
-      runtime: lambda.Runtime.NODEJS_20_X,
-      handler: 'generateSummary.handler',
-      code: lambda.Code.fromAsset(path.join(functionsRoot, 'admin')),
-      environment: commonEnv
-    })
+    const generateSummaryFn = new NodejsFunction(this, 'GenerateSummaryFn', { ...nodejsProps, entry: path.join(functionsRoot, 'admin/generateSummary.ts') })
     props.contentTable.grantReadData(generateSummaryFn)
-    generateSummaryFn.addToRolePolicy(new iam.PolicyStatement({
-      actions: ['bedrock:InvokeModel'],
-      resources: ['*']
-    }))
+    generateSummaryFn.addToRolePolicy(new iam.PolicyStatement({ actions: ['bedrock:InvokeModel'], resources: ['*'] }))
 
-    const updateAllowListFn = new lambda.Function(this, 'UpdateAllowListFn', {
-      runtime: lambda.Runtime.NODEJS_20_X,
-      handler: 'updateAllowList.handler',
-      code: lambda.Code.fromAsset(path.join(functionsRoot, 'admin')),
-      environment: commonEnv
-    })
+    const updateAllowListFn = new NodejsFunction(this, 'UpdateAllowListFn', { ...nodejsProps, entry: path.join(functionsRoot, 'admin/updateAllowList.ts') })
     props.allowListTable.grantReadWriteData(updateAllowListFn)
 
-    // ── Routes: Unauthenticated ────────────────────────────────────────────
+    // ── Routes ─────────────────────────────────────────────────────────────
     httpApi.addRoutes({ path: '/auth/check-allowlist', methods: [apigwv2.HttpMethod.POST], integration: new apigwv2Int.HttpLambdaIntegration('CheckAllowList', checkAllowListFn) })
     httpApi.addRoutes({ path: '/auth/deeplink/exchange', methods: [apigwv2.HttpMethod.POST], integration: new apigwv2Int.HttpLambdaIntegration('DeepLinkExchange', deepLinkExchangeFn) })
-
-    // ── Routes: Authenticated ──────────────────────────────────────────────
     httpApi.addRoutes({ path: '/onboarding', methods: [apigwv2.HttpMethod.POST], integration: new apigwv2Int.HttpLambdaIntegration('SubmitOnboarding', submitOnboardingFn), authorizer: jwtAuth })
     httpApi.addRoutes({ path: '/plan/status', methods: [apigwv2.HttpMethod.GET], integration: new apigwv2Int.HttpLambdaIntegration('PlanStatus', generatePlanFn), authorizer: jwtAuth })
     httpApi.addRoutes({ path: '/module/today', methods: [apigwv2.HttpMethod.GET], integration: new apigwv2Int.HttpLambdaIntegration('GetModuleToday', getModuleFn), authorizer: jwtAuth })
@@ -193,15 +116,12 @@ export class ApiStack extends cdk.Stack {
     httpApi.addRoutes({ path: '/progress/pause', methods: [apigwv2.HttpMethod.PATCH], integration: new apigwv2Int.HttpLambdaIntegration('SetPause', setPauseStateFn), authorizer: jwtAuth })
     httpApi.addRoutes({ path: '/profile', methods: [apigwv2.HttpMethod.GET], integration: new apigwv2Int.HttpLambdaIntegration('GetProfile', getProgressFn), authorizer: jwtAuth })
     httpApi.addRoutes({ path: '/profile/notifications', methods: [apigwv2.HttpMethod.PATCH], integration: new apigwv2Int.HttpLambdaIntegration('SetNotif', setPauseStateFn), authorizer: jwtAuth })
-
-    // ── Routes: Admin ──────────────────────────────────────────────────────
     httpApi.addRoutes({ path: '/admin/content', methods: [apigwv2.HttpMethod.GET], integration: new apigwv2Int.HttpLambdaIntegration('AdminListContent', upsertContentFn), authorizer: jwtAuth })
     httpApi.addRoutes({ path: '/admin/content/{contentId}', methods: [apigwv2.HttpMethod.PUT], integration: new apigwv2Int.HttpLambdaIntegration('AdminUpsertContent', upsertContentFn), authorizer: jwtAuth })
     httpApi.addRoutes({ path: '/admin/content/{contentId}/summarise', methods: [apigwv2.HttpMethod.POST], integration: new apigwv2Int.HttpLambdaIntegration('AdminSummarise', generateSummaryFn), authorizer: jwtAuth })
     httpApi.addRoutes({ path: '/admin/allowlist', methods: [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.POST], integration: new apigwv2Int.HttpLambdaIntegration('AdminAllowList', updateAllowListFn), authorizer: jwtAuth })
     httpApi.addRoutes({ path: '/admin/allowlist/{value}', methods: [apigwv2.HttpMethod.DELETE], integration: new apigwv2Int.HttpLambdaIntegration('AdminDeleteAllow', updateAllowListFn), authorizer: jwtAuth })
 
-    // ── Output ─────────────────────────────────────────────────────────────
     new cdk.CfnOutput(this, 'ApiEndpoint', { value: httpApi.apiEndpoint })
   }
 }
