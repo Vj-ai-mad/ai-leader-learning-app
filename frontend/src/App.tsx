@@ -19,8 +19,8 @@ import RoadmapView from '@/components/roadmap/RoadmapView'
 import WeeklyRecap from '@/components/recap/WeeklyRecap'
 import ProfileScreen from '@/components/profile/ProfileScreen'
 
-// Placeholder stubs for routes not yet implemented
-const AdminScreen    = () => <div className="p-6">Admin — coming in Phase 8</div>
+// Admin
+import AdminScreen from '@/components/admin/AdminScreen'
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, onboardingComplete, planStatus, isLoading } = useAuthStore()
