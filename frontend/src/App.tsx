@@ -15,11 +15,11 @@ import PlanGenerating from '@/components/onboarding/PlanGenerating'
 // App screens
 import HomeScreen from '@/components/home/HomeScreen'
 import ModuleScreen from '@/components/module/ModuleScreen'
+import RoadmapView from '@/components/roadmap/RoadmapView'
+import WeeklyRecap from '@/components/recap/WeeklyRecap'
+import ProfileScreen from '@/components/profile/ProfileScreen'
 
 // Placeholder stubs for routes not yet implemented
-const RoadmapView    = () => <div className="p-6">Roadmap — coming in Phase 6</div>
-const WeeklyRecap    = () => <div className="p-6">Weekly Recap — coming in Phase 6</div>
-const ProfileScreen  = () => <div className="p-6">Profile — coming in Phase 6</div>
 const AdminScreen    = () => <div className="p-6">Admin — coming in Phase 8</div>
 
 function AuthGate({ children }: { children: React.ReactNode }) {
