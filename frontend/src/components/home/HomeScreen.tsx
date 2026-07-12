@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getTodayModule, setPauseState } from '@/api'
+import { getTodayModule, setPauseState, getPlanStatus } from '@/api'
 import { useAuthStore } from '@/store/authStore'
 import type { ModuleResponse } from '@/types'
 
@@ -18,12 +18,19 @@ export default function HomeScreen() {
   const [module, setModule] = useState<ModuleResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [totalDays, setTotalDays] = useState(46)
+  const [currentDay, setCurrentDay] = useState(0)
 
   useEffect(() => {
     async function load() {
       try {
-        const data = await getTodayModule()
-        setModule(data)
+        const [moduleData, statusData] = await Promise.all([
+          getTodayModule(),
+          getPlanStatus()
+        ])
+        setModule(moduleData)
+        setTotalDays(statusData.totalDays || 46)
+        setCurrentDay(statusData.currentDayIndex || 0)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load module')
       } finally {
@@ -50,6 +57,7 @@ export default function HomeScreen() {
   }
 
   const stageColor = module ? STAGE_COLORS[module.stageNumber] ?? STAGE_COLORS[1] : ''
+  const progressPct = Math.round((currentDay / totalDays) * 100)
 
   return (
     <div className="pb-20">
@@ -60,6 +68,22 @@ export default function HomeScreen() {
       </header>
 
       <main className="px-4 py-5 space-y-5">
+        {/* Progress header */}
+        {module && planStatus !== 'paused' && (
+          <div className="rounded-xl bg-navy-700/5 border border-navy-100 p-4">
+            <p className="text-sm font-medium text-navy-700">
+              Day {currentDay + 1} of {totalDays} · Stage {module.stageNumber} of 5
+            </p>
+            <div className="mt-2 h-2 w-full rounded-full bg-gray-200">
+              <div
+                className="h-full rounded-full bg-amber-400 transition-all"
+                style={{ width: `${progressPct}%` }}
+              />
+            </div>
+            <p className="mt-1.5 text-xs text-gray-500">{progressPct}% complete</p>
+          </div>
+        )}
+
         {/* Paused banner */}
         {planStatus === 'paused' && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
@@ -76,7 +100,7 @@ export default function HomeScreen() {
           </div>
         )}
 
-        {/* WhatsApp reminder banner (placeholder — shown when notifications are active) */}
+        {/* WhatsApp reminder banner */}
         {module && planStatus !== 'paused' && (
           <div className="rounded-xl border border-green-200 bg-[#e7f5ea] p-3 flex items-center gap-3">
             <div className="flex-shrink-0 rounded-full bg-[#25d366] p-1.5">
@@ -114,6 +138,7 @@ export default function HomeScreen() {
               <span className="capitalize">{module.format}</span>
             </div>
 
+            {/* Primary CTA button */}
             <button
               onClick={() => navigate(`/module/${module.dayIndex}`)}
               className="mt-4 w-full rounded-lg bg-navy-700 px-4 py-3 text-sm font-medium text-white hover:bg-navy-800 transition"
@@ -129,7 +154,7 @@ export default function HomeScreen() {
           </div>
         )}
 
-        {/* Streak */}
+        {/* Streak prompt */}
         {module && !module.completedAt && planStatus !== 'paused' && (
           <p className="text-center text-xs text-gray-500">
             Complete today's module to build your streak
