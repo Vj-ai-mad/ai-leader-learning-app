@@ -106,7 +106,7 @@ export default function ModuleScreen() {
             href={module.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-6 flex items-center justify-center gap-2 rounded-md border border-brand-200 bg-brand-50 px-4 py-3 text-sm font-medium text-brand-700 hover:bg-brand-100"
+            className="mt-6 flex items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700 hover:bg-blue-100 transition"
           >
             Read / Watch Original
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
