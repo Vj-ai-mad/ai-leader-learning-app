@@ -1,11 +1,14 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda'
 import { GetCommand, PutCommand, UpdateCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
+import { InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
 import { docClient } from '../shared/dynamodb'
+import { bedrockClient } from '../shared/bedrock'
 import { randomUUID } from 'crypto'
 
 const USERS_TABLE = process.env.USERS_TABLE ?? 'ai-leader-users'
 const PLANS_TABLE = process.env.PLANS_TABLE ?? 'ai-leader-plans'
 const CONTENT_TABLE = process.env.CONTENT_TABLE ?? 'ai-leader-content'
+const MODEL_ID = process.env.BEDROCK_MODEL_ID ?? 'us.anthropic.claude-sonnet-4-20250514-v1:0'
 
 interface ContentItem {
   contentId: string
@@ -19,14 +22,12 @@ interface ContentItem {
 }
 
 /**
- * Plan generation strategy (cost-optimized):
- * 1. Read all seeded content items from DynamoDB (already have aiSummary)
- * 2. Filter by user's dailyMinutes budget and role relevance
- * 3. Sequence items in stage order (1->2->3->4->5)
- * 4. Use the pre-existing aiSummary from each content item — NO Bedrock call
- *
- * This approach costs $0 per plan generation (only DynamoDB reads).
- * Bedrock was already used once during seed to generate the summaries.
+ * Plan generation strategy:
+ * 1. Read all seeded content items (already have aiSummary)
+ * 2. TRY: lightweight Bedrock call to order items based on user's role,
+ *    responsibilities, and career goal (personalization)
+ * 3. FALLBACK: if Bedrock fails, sequence deterministically by stage + role relevance
+ * 4. Use pre-existing aiSummary from content items — never regenerate summaries
  */
 
 export async function handler(event: unknown): Promise<APIGatewayProxyResultV2 | void> {
@@ -65,36 +66,35 @@ export async function handler(event: unknown): Promise<APIGatewayProxyResultV2 |
       return
     }
 
-    // 3. Filter by user's time budget
-    const dailyMinutes = user.dailyMinutes ?? 25
-    const userRole = user.role ?? 'General'
-
-    const eligible = allItems.filter(
-      item => item.estimatedMinutes <= dailyMinutes
-    )
-
-    // 4. Sort by stage order, prioritize role-relevant items
-    const sorted = eligible.sort((a, b) => {
-      if (a.stage !== b.stage) return a.stage - b.stage
-      const aRelevant = hasRole(a.roleRelevance, userRole) ? 0 : 1
-      const bRelevant = hasRole(b.roleRelevance, userRole) ? 0 : 1
-      return aRelevant - bRelevant
-    })
-
-    // 5. Take 42-46 items (all available up to 56 max)
-    const planItems = sorted.slice(0, Math.min(sorted.length, 56))
-
-    if (planItems.length < 42) {
-      console.error(`[generatePlan] Only ${planItems.length} eligible items after filtering`)
-      await setUserPlanStatus(userId, 'error')
-      return
+    // 3. Try personalized ordering via Bedrock, fall back to deterministic
+    let orderedIds: string[]
+    try {
+      orderedIds = await getPersonalizedOrder(user, allItems)
+      console.log('[generatePlan] Using Bedrock-personalized ordering')
+    } catch (err) {
+      console.warn('[generatePlan] Bedrock ordering failed, using deterministic fallback:', err)
+      orderedIds = getDeterministicOrder(allItems, user.role ?? 'General')
     }
 
-    // 6. Build plan using pre-existing aiSummary — NO Bedrock call
+    // 4. Build plan using ordered IDs and pre-existing aiSummary
+    const itemMap = new Map(allItems.map(i => [i.contentId, i]))
+    const planItems = orderedIds
+      .map(id => itemMap.get(id))
+      .filter((item): item is ContentItem => !!item)
+
+    if (planItems.length < 42) {
+      // Bedrock returned fewer items — pad with remaining items
+      const usedIds = new Set(orderedIds)
+      const remaining = allItems
+        .filter(i => !usedIds.has(i.contentId))
+        .sort((a, b) => a.stage - b.stage)
+      planItems.push(...remaining.slice(0, 56 - planItems.length))
+    }
+
     const planId = randomUUID()
     const now = new Date().toISOString()
 
-    const days = planItems.map((item, i) => ({
+    const days = planItems.slice(0, 56).map((item, i) => ({
       dayIndex: i,
       stageNumber: item.stage,
       contentId: item.contentId,
@@ -104,34 +104,88 @@ export async function handler(event: unknown): Promise<APIGatewayProxyResultV2 |
 
     await docClient.send(new PutCommand({
       TableName: PLANS_TABLE,
-      Item: {
-        planId,
-        userId,
-        generatedAt: now,
-        totalDays: days.length,
-        days
-      }
+      Item: { planId, userId, generatedAt: now, totalDays: days.length, days }
     }))
 
-    // 7. Update user record
     await docClient.send(new UpdateCommand({
       TableName: USERS_TABLE,
       Key: { userId },
       UpdateExpression: 'SET planId = :planId, planStatus = :active, currentDayIndex = :zero, totalDays = :total, updatedAt = :now',
       ExpressionAttributeValues: {
-        ':planId': planId,
-        ':active': 'active',
-        ':zero': 0,
-        ':total': days.length,
-        ':now': now
+        ':planId': planId, ':active': 'active', ':zero': 0, ':total': days.length, ':now': now
       }
     }))
 
-    console.log(`[generatePlan] Success: planId=${planId}, ${days.length} days for user ${userId} (no Bedrock call — used pre-seeded summaries)`)
+    console.log(`[generatePlan] Success: planId=${planId}, ${days.length} days`)
   } catch (err) {
     console.error('[generatePlan] Error:', err)
     await setUserPlanStatus(userId, 'error')
   }
+}
+
+// ── Personalized ordering via Bedrock (lightweight call) ───────────────────
+
+async function getPersonalizedOrder(user: Record<string, unknown>, items: ContentItem[]): Promise<string[]> {
+  const itemList = items.map(i => ({
+    id: i.contentId,
+    title: i.title,
+    stage: i.stage,
+    tags: Array.isArray(i.tags) ? i.tags : Array.from(i.tags as Set<string>)
+  }))
+
+  const prompt = `You are sequencing a personalized learning plan for a delivery leader.
+
+Learner profile:
+- Role: ${user.role}
+- Current responsibilities: ${user.responsibilities || 'Not specified'}
+- 5-year career goal: ${user.careerGoal || 'Not specified'}
+- Daily time: ${user.dailyMinutes} minutes
+
+Content items (JSON):
+${JSON.stringify(itemList)}
+
+Instructions:
+- Return ONLY a JSON array of contentId strings in the recommended learning order
+- Maintain stage progression (1->2->3->4->5) but within each stage, prioritize items most relevant to this learner's responsibilities and goals
+- Include ALL items — do not skip any
+- Return nothing else, just the JSON array of IDs`
+
+  const response = await bedrockClient.send(new InvokeModelCommand({
+    modelId: MODEL_ID,
+    contentType: 'application/json',
+    accept: 'application/json',
+    body: JSON.stringify({
+      anthropic_version: 'bedrock-2023-05-31',
+      max_tokens: 2048,
+      messages: [{ role: 'user', content: prompt }]
+    })
+  }))
+
+  const body = JSON.parse(new TextDecoder().decode(response.body))
+  const text = body.content?.[0]?.text ?? ''
+
+  const match = text.match(/\[[\s\S]*\]/)
+  if (!match) throw new Error('No JSON array in response')
+
+  const ids: string[] = JSON.parse(match[0])
+  if (!Array.isArray(ids) || ids.length < 40) {
+    throw new Error(`Too few IDs returned: ${ids.length}`)
+  }
+
+  return ids
+}
+
+// ── Deterministic fallback (zero cost) ─────────────────────────────────────
+
+function getDeterministicOrder(items: ContentItem[], role: string): string[] {
+  return items
+    .sort((a, b) => {
+      if (a.stage !== b.stage) return a.stage - b.stage
+      const aRelevant = hasRole(a.roleRelevance, role) ? 0 : 1
+      const bRelevant = hasRole(b.roleRelevance, role) ? 0 : 1
+      return aRelevant - bRelevant
+    })
+    .map(i => i.contentId)
 }
 
 // ── Status check (GET /plan/status) ────────────────────────────────────────
@@ -158,9 +212,7 @@ async function handleStatusCheck(event: APIGatewayProxyEventV2): Promise<APIGate
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function hasRole(roleRelevance: string[] | Set<string>, role: string): boolean {
-  if (roleRelevance instanceof Set) {
-    return roleRelevance.has(role) || roleRelevance.has('General')
-  }
+  if (roleRelevance instanceof Set) return roleRelevance.has(role) || roleRelevance.has('General')
   return roleRelevance.includes(role) || roleRelevance.includes('General')
 }
 
