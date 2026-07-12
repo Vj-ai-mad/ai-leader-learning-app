@@ -100,8 +100,8 @@ export default function ModuleScreen() {
           ))}
         </article>
 
-        {/* External resource link */}
-        {module.url && !module.url.startsWith('#') && (
+        {/* External resource link — always visible */}
+        {module.url && !module.url.startsWith('#') ? (
           <a
             href={module.url}
             target="_blank"
@@ -109,6 +109,18 @@ export default function ModuleScreen() {
             className="mt-6 flex items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700 hover:bg-blue-100 transition"
           >
             Read / Watch Original
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+          </a>
+        ) : (
+          <a
+            href={`https://www.google.com/search?q=${encodeURIComponent(module.title + ' for delivery leaders')}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-6 flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-600 hover:bg-gray-100 transition"
+          >
+            Explore More on This Topic
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
             </svg>
