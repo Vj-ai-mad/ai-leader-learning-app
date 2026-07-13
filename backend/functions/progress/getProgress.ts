@@ -1,9 +1,10 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda'
-import { GetCommand } from '@aws-sdk/lib-dynamodb'
+import { GetCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
 import { docClient } from '../shared/dynamodb'
 
 const USERS_TABLE = process.env.USERS_TABLE ?? 'ai-leader-users'
 const PLANS_TABLE = process.env.PLANS_TABLE ?? 'ai-leader-plans'
+const CONTENT_TABLE = process.env.CONTENT_TABLE ?? 'ai-leader-content'
 
 const STAGE_LABELS: Record<number, string> = {
   1: 'AI Literacy Foundations',
@@ -56,6 +57,16 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
       completedAt: string | null
     }>
 
+    // Fetch content titles
+    const contentResult = await docClient.send(new ScanCommand({
+      TableName: CONTENT_TABLE,
+      ProjectionExpression: 'contentId, title'
+    }))
+    const titleMap = new Map<string, string>()
+    for (const item of contentResult.Items ?? []) {
+      titleMap.set(item.contentId as string, item.title as string)
+    }
+
     // Group by stage
     const stageMap = new Map<number, typeof days>()
     for (const d of days) {
@@ -72,7 +83,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
         completedModules: modules.filter(m => m.completedAt).length,
         modules: modules.map(m => ({
           dayIndex: m.dayIndex,
-          title: '', // title requires Content join — acceptable to omit for now
+          title: titleMap.get(m.contentId) ?? `Module ${m.dayIndex + 1}`,
           completedAt: m.completedAt
         }))
       }))

@@ -96,6 +96,7 @@ export class ApiStack extends cdk.Stack {
     const getProgressFn = new NodejsFunction(this, 'GetProgressFn', { ...nodejsProps, entry: path.join(functionsRoot, 'progress/getProgress.ts') })
     props.usersTable.grantReadData(getProgressFn)
     props.plansTable.grantReadData(getProgressFn)
+    props.contentTable.grantReadData(getProgressFn)
 
     const setPauseStateFn = new NodejsFunction(this, 'SetPauseStateFn', { ...nodejsProps, entry: path.join(functionsRoot, 'progress/setPauseState.ts') })
     props.usersTable.grantReadWriteData(setPauseStateFn)
