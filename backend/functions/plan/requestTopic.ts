@@ -10,13 +10,21 @@ const PLANS_TABLE = process.env.PLANS_TABLE ?? 'ai-leader-plans'
 const CONTENT_TABLE = process.env.CONTENT_TABLE ?? 'ai-leader-content'
 const MODEL_ID = process.env.BEDROCK_MODEL_ID ?? 'us.anthropic.claude-haiku-4-5-20251001-v1:0'
 
+interface GeneratedModule {
+  title: string
+  lesson: string
+}
+
 /**
  * POST /plan/request-topic
  * Body: { topic: string }
  *
- * 1. Calls Bedrock to generate a 300-500 word lesson on the requested topic
- * 2. Saves as a Content item (reviewedByAdmin: false, userId: requester)
- * 3. Appends the new module to the user's existing plan as an extra day
+ * 1. Calls Bedrock to:
+ *    - Detect if input contains multiple topics and split them
+ *    - Generate a clean title-cased title for each
+ *    - Generate a 300-500 word lesson for each
+ * 2. Saves each as a Content item (reviewedByAdmin: false, originalRequest preserved)
+ * 3. Appends each to the user's plan as extra days
  */
 export async function handler(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
   try {
@@ -24,121 +32,144 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
     if (!userId) return res(401, { error: 'Unauthorized' })
 
     const body = JSON.parse(event.body ?? '{}')
-    const topic = (body.topic ?? '').trim()
+    const rawTopic = (body.topic ?? '').trim()
 
-    if (!topic || topic.length < 3) {
+    if (!rawTopic || rawTopic.length < 3) {
       return res(400, { error: 'Topic must be at least 3 characters' })
     }
-
-    if (topic.length > 200) {
-      return res(400, { error: 'Topic must be under 200 characters' })
+    if (rawTopic.length > 500) {
+      return res(400, { error: 'Topic must be under 500 characters' })
     }
 
     // Get user profile for role context
     const userResult = await docClient.send(new GetCommand({
-      TableName: USERS_TABLE,
-      Key: { userId }
+      TableName: USERS_TABLE, Key: { userId }
     }))
     const user = userResult.Item
     if (!user) return res(404, { error: 'User not found' })
 
-    // Call Bedrock to generate content
     const role = user.role ?? 'Delivery Manager'
-    const prompt = `Write an original 300-500 word lesson for a ${role} on this topic: "${topic}". Assume no technical background beyond general software delivery experience. End with one practical takeaway they can apply this week. If this topic is not related to AI, technology leadership, delivery management, or professional skill-building, politely decline and suggest a related topic instead.`
 
-    let aiSummary: string
-    try {
-      const response = await bedrockClient.send(new InvokeModelCommand({
-        modelId: MODEL_ID,
-        contentType: 'application/json',
-        accept: 'application/json',
-        body: JSON.stringify({
-          anthropic_version: 'bedrock-2023-05-31',
-          max_tokens: 1024,
-          messages: [{ role: 'user', content: prompt }]
-        })
-      }))
+    // Call Bedrock: split topics, generate clean titles + lessons
+    const modules = await generateModules(rawTopic, role)
 
-      const responseBody = JSON.parse(new TextDecoder().decode(response.body))
-      aiSummary = responseBody.content?.[0]?.text ?? ''
-    } catch (err) {
-      console.error('[requestTopic] Bedrock error:', err)
-      // Fallback: save the topic as a placeholder for later generation
-      aiSummary = `[Pending AI generation] Topic requested: ${topic}. Content will be generated when the AI service is available.`
-    }
-
-    // Create content item (user-specific, not reviewed)
-    const contentId = `user-${userId}-${randomUUID().slice(0, 8)}`
-    const now = new Date().toISOString()
-
-    await docClient.send(new PutCommand({
-      TableName: CONTENT_TABLE,
-      Item: {
-        contentId,
-        title: topic,
-        url: `#user-requested-${contentId}`,
-        format: 'article',
-        stage: 6, // Beyond the 5 core stages — marks it as user-requested
-        roleRelevance: new Set([role, 'General']),
-        tags: new Set(['user-requested', role.toLowerCase()]),
-        aiSummary,
-        estimatedMinutes: 15,
-        active: 'true',
-        reviewedByAdmin: false,
-        requestedBy: userId,
-        createdAt: now,
-        updatedAt: now
-      }
-    }))
-
-    // Append to user's plan as an extra day
+    // Save each module and append to plan
+    const results: { contentId: string; title: string }[] = []
     const planId = user.planId
-    if (planId) {
-      const planResult = await docClient.send(new GetCommand({
-        TableName: PLANS_TABLE,
-        Key: { planId }
-      }))
-      const plan = planResult.Item
-      if (plan?.days) {
-        const newDayIndex = plan.days.length
-        const newDay = {
-          dayIndex: newDayIndex,
-          stageNumber: 6,
+
+    for (const mod of modules) {
+      const contentId = `user-${userId}-${randomUUID().slice(0, 8)}`
+      const now = new Date().toISOString()
+
+      await docClient.send(new PutCommand({
+        TableName: CONTENT_TABLE,
+        Item: {
           contentId,
-          aiSummary,
-          completedAt: null
+          title: mod.title,
+          url: `#user-requested-${contentId}`,
+          format: 'article',
+          stage: 6,
+          roleRelevance: new Set([role, 'General']),
+          tags: new Set(['user-requested', role.toLowerCase()]),
+          aiSummary: mod.lesson,
+          estimatedMinutes: 15,
+          active: 'true',
+          reviewedByAdmin: false,
+          requestedBy: userId,
+          originalRequest: rawTopic,
+          createdAt: now,
+          updatedAt: now
         }
+      }))
 
-        await docClient.send(new UpdateCommand({
-          TableName: PLANS_TABLE,
-          Key: { planId },
-          UpdateExpression: 'SET #days = list_append(#days, :newDay), totalDays = :total',
-          ExpressionAttributeNames: { '#days': 'days' },
-          ExpressionAttributeValues: {
-            ':newDay': [newDay],
-            ':total': newDayIndex + 1
-          }
+      // Append to plan
+      if (planId) {
+        const planResult = await docClient.send(new GetCommand({
+          TableName: PLANS_TABLE, Key: { planId }
         }))
+        const plan = planResult.Item
+        if (plan?.days) {
+          const newDayIndex = plan.days.length
+          await docClient.send(new UpdateCommand({
+            TableName: PLANS_TABLE,
+            Key: { planId },
+            UpdateExpression: 'SET #days = list_append(#days, :newDay), totalDays = :total',
+            ExpressionAttributeNames: { '#days': 'days' },
+            ExpressionAttributeValues: {
+              ':newDay': [{ dayIndex: newDayIndex, stageNumber: 6, contentId, aiSummary: mod.lesson, completedAt: null }],
+              ':total': newDayIndex + 1
+            }
+          }))
 
-        // Update user's totalDays
-        await docClient.send(new UpdateCommand({
-          TableName: USERS_TABLE,
-          Key: { userId },
-          UpdateExpression: 'SET totalDays = :total, updatedAt = :now',
-          ExpressionAttributeValues: { ':total': newDayIndex + 1, ':now': now }
-        }))
+          await docClient.send(new UpdateCommand({
+            TableName: USERS_TABLE,
+            Key: { userId },
+            UpdateExpression: 'SET totalDays = :total, updatedAt = :now',
+            ExpressionAttributeValues: { ':total': newDayIndex + 1, ':now': now }
+          }))
+        }
       }
+
+      results.push({ contentId, title: mod.title })
     }
 
     return res(200, {
-      contentId,
-      title: topic,
-      aiSummary,
-      message: 'Topic added to your plan'
+      modules: results,
+      message: `${results.length} module(s) added to your plan`
     })
   } catch (err) {
     console.error('[requestTopic] Error:', err)
     return res(500, { error: 'Failed to process topic request' })
+  }
+}
+
+async function generateModules(rawInput: string, role: string): Promise<GeneratedModule[]> {
+  const prompt = `You are creating learning modules for a ${role} in a delivery leadership AI literacy program.
+
+The user submitted this topic request (may contain typos or multiple topics crammed together):
+"${rawInput}"
+
+Instructions:
+1. If the input contains multiple distinct topics, split them into separate modules (max 4).
+2. For each module, generate:
+   - A clean, properly-worded, title-cased title (matching the style: "How Large Language Models Work", "Budgeting for AI: Understanding Token Costs", "Bias and Fairness in AI Systems")
+   - A 300-500 word original lesson for a ${role}. Assume no technical background beyond software delivery. End with one practical takeaway.
+3. If the topic is not related to AI, technology leadership, delivery management, or professional skill-building, politely decline and suggest a related topic instead — still return a valid module with the suggestion as the lesson.
+4. Fix any typos or unclear phrasing in the title. Never use the user's raw text as the title.
+
+Return ONLY valid JSON array (no other text):
+[{"title": "Clean Title Here", "lesson": "Full 300-500 word lesson text here..."}]`
+
+  try {
+    const response = await bedrockClient.send(new InvokeModelCommand({
+      modelId: MODEL_ID,
+      contentType: 'application/json',
+      accept: 'application/json',
+      body: JSON.stringify({
+        anthropic_version: 'bedrock-2023-05-31',
+        max_tokens: 4096,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    }))
+
+    const responseBody = JSON.parse(new TextDecoder().decode(response.body))
+    const text = responseBody.content?.[0]?.text ?? ''
+
+    const match = text.match(/\[[\s\S]*\]/)
+    if (!match) throw new Error('No JSON array in response')
+
+    const parsed: GeneratedModule[] = JSON.parse(match[0])
+    if (!Array.isArray(parsed) || parsed.length === 0) throw new Error('Empty result')
+
+    return parsed.slice(0, 4) // Max 4 modules per request
+  } catch (err) {
+    console.error('[requestTopic] Bedrock generation failed:', err)
+    // Fallback: create a single module with a cleaned-up title
+    const cleanTitle = rawInput.charAt(0).toUpperCase() + rawInput.slice(1).replace(/\s+/g, ' ').trim()
+    return [{
+      title: cleanTitle.length > 60 ? cleanTitle.slice(0, 57) + '...' : cleanTitle,
+      lesson: `[Pending AI generation] Topic requested: ${rawInput}. Content will be generated when the AI service is available.`
+    }]
   }
 }
 
