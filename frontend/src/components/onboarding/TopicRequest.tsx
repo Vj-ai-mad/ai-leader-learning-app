@@ -87,17 +87,12 @@ export default function TopicRequest() {
           </p>
         </div>
 
-        {/* Plan summary */}
+        {/* Plan summary with expandable stages */}
         {plan && (
-          <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 space-y-2">
+          <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 space-y-1">
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Your learning path</p>
             {plan.stages.map((stage) => (
-              <div key={stage.stageNumber} className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">
-                <span className="text-sm text-gray-700">
-                  {STAGE_LABELS[stage.stageNumber] ?? `Stage ${stage.stageNumber}`}
-                </span>
-                <span className="text-xs text-gray-400">{stage.totalModules} modules</span>
-              </div>
+              <StageRow key={stage.stageNumber} stage={stage} />
             ))}
           </div>
         )}
@@ -171,6 +166,38 @@ export default function TopicRequest() {
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+function StageRow({ stage }: { stage: { stageNumber: number; totalModules: number; modules: { dayIndex: number; title: string }[] } }) {
+  const [expanded, setExpanded] = useState(false)
+
+  return (
+    <div className="border-b border-gray-50 last:border-0">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between py-2 text-left hover:bg-gray-50 rounded-md px-1"
+      >
+        <span className="text-sm text-gray-700">
+          {STAGE_LABELS[stage.stageNumber] ?? `Stage ${stage.stageNumber}`}
+        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-400">{stage.totalModules} modules</span>
+          <svg className={`h-3.5 w-3.5 text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+      </button>
+      {expanded && (
+        <div className="pl-3 pb-2 space-y-1">
+          {stage.modules.map((mod, idx) => (
+            <p key={mod.dayIndex} className="text-xs text-gray-500 py-0.5">
+              {idx + 1}. {mod.title || `Module ${mod.dayIndex + 1}`}
+            </p>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
