@@ -1,9 +1,9 @@
 # Tasks: AI Learning App for Delivery Leaders - Tester Phase
 
 **Owner:** Vijayakumar J
-**Version:** 0.1
+**Version:** 0.2 (Updated July 2026 — reflects implementation progress)
 **Date:** July 2026
-**Derives from:** design.md v0.1
+**Derives from:** design.md v0.2
 
 Each task has a status: [ ] not started, [x] complete, [~] in progress.
 Tasks are grouped by build phase. Complete phases in order.

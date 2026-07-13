@@ -1,9 +1,9 @@
 # Design: AI Learning App for Delivery Leaders - Tester Phase
 
 **Owner:** Vijayakumar J
-**Version:** 0.1
+**Version:** 0.2 (Updated July 2026 — reflects deployed state)
 **Date:** July 2026
-**Derives from:** requirements.md v0.2
+**Derives from:** requirements.md v0.3
 
 ---
 
