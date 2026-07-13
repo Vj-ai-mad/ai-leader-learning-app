@@ -71,5 +71,6 @@ export const STAGE_LABELS: Record<number, string> = {
   2: 'AI in Delivery & Program Management',
   3: 'Leading AI-enabled Initiatives',
   4: 'Governance, Risk & Responsible AI',
-  5: 'Becoming the AI-fluent Leader'
+  5: 'Becoming the AI-fluent Leader',
+  6: 'Additional Topics'
 }

@@ -12,6 +12,7 @@ export default function TopicRequest() {
   const [submitted, setSubmitted] = useState(0)
   const [error, setError] = useState('')
   const [loadingPlan, setLoadingPlan] = useState(true)
+  const [showUpdatedPlan, setShowUpdatedPlan] = useState(false)
 
   useEffect(() => {
     async function loadPlan() {
@@ -56,7 +57,13 @@ export default function TopicRequest() {
       }
     }
 
-    navigate('/home', { replace: true })
+    try {
+      const updatedPlan = await getProgress()
+      setPlan(updatedPlan)
+    } catch {}
+
+    setSubmitting(false)
+    setShowUpdatedPlan(true)
   }
 
   function handleSkip() {
@@ -71,10 +78,60 @@ export default function TopicRequest() {
     )
   }
 
+  // After topics submitted — show updated plan with custom topics highlighted
+  if (showUpdatedPlan && plan) {
+    const coreStages = plan.stages.filter(s => s.stageNumber <= 5)
+    const customStages = plan.stages.filter(s => s.stageNumber > 5)
+
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8">
+        <div className="w-full max-w-md">
+          <div className="mb-6 text-center">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
+              <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h1 className="text-xl font-semibold text-gray-900">Plan updated!</h1>
+            <p className="mt-1 text-sm text-gray-500">
+              {plan.totalDays} modules total — your custom topics have been added
+            </p>
+          </div>
+
+          <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 space-y-1">
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Your learning path</p>
+            {coreStages.map((stage) => (
+              <StageRow key={stage.stageNumber} stage={stage} />
+            ))}
+
+            {customStages.length > 0 && (
+              <>
+                <div className="pt-3 mt-2 border-t border-gray-200">
+                  <p className="text-xs font-medium text-blue-600 uppercase tracking-wide mb-2">Additional Topics (your requests)</p>
+                </div>
+                {customStages.flatMap(s => s.modules).map((mod, idx) => (
+                  <p key={mod.dayIndex} className="text-sm text-gray-700 py-1 pl-2">
+                    {idx + 1}. {mod.title || `Custom module ${idx + 1}`}
+                  </p>
+                ))}
+              </>
+            )}
+          </div>
+
+          <button
+            onClick={() => navigate('/home', { replace: true })}
+            className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            Start Learning
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8">
       <div className="w-full max-w-md">
-        {/* Success header */}
         <div className="mb-6 text-center">
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
             <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -87,7 +144,6 @@ export default function TopicRequest() {
           </p>
         </div>
 
-        {/* Plan summary with expandable stages */}
         {plan && (
           <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 space-y-1">
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Your learning path</p>
@@ -97,7 +153,6 @@ export default function TopicRequest() {
           </div>
         )}
 
-        {/* Topic request section */}
         <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4">
           <p className="text-sm font-medium text-gray-900">
             Anything specific you'd like us to cover that's not already included?
