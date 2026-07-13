@@ -36,7 +36,7 @@ export class ApiStack extends cdk.Stack {
       BEDROCK_MODEL_ID: 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
       COGNITO_USER_POOL_ID: props.userPool.userPoolId,
       COGNITO_USER_POOL_CLIENT_ID: props.userPoolClient.userPoolClientId,
-      APP_BASE_URL: 'https://REPLACE_AFTER_DEPLOY',
+      APP_BASE_URL: 'https://staging.d2kbjleppi9cxx.amplifyapp.com',
       DEEPLINK_JWT_SECRET: 'REPLACE_WITH_SECRET'
     }
 
