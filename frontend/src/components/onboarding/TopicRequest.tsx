@@ -1,13 +1,27 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { requestTopic } from '@/api'
+import { requestTopic, getProgress } from '@/api'
+import type { ProgressResponse } from '@/types'
+import { STAGE_LABELS } from '@/types'
 
 export default function TopicRequest() {
   const navigate = useNavigate()
+  const [plan, setPlan] = useState<ProgressResponse | null>(null)
   const [topics, setTopics] = useState<string[]>([''])
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(0)
   const [error, setError] = useState('')
+  const [loadingPlan, setLoadingPlan] = useState(true)
+
+  useEffect(() => {
+    async function loadPlan() {
+      try {
+        const data = await getProgress()
+        setPlan(data)
+      } catch {} finally { setLoadingPlan(false) }
+    }
+    loadPlan()
+  }, [])
 
   function addField() {
     if (topics.length < 5) setTopics([...topics, ''])
@@ -49,9 +63,18 @@ export default function TopicRequest() {
     navigate('/home', { replace: true })
   }
 
+  if (loadingPlan) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+      </div>
+    )
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8">
       <div className="w-full max-w-md">
+        {/* Success header */}
         <div className="mb-6 text-center">
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
             <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -59,44 +82,66 @@ export default function TopicRequest() {
             </svg>
           </div>
           <h1 className="text-xl font-semibold text-gray-900">Your plan is ready!</h1>
-          <p className="mt-2 text-sm text-gray-600">
-            Anything specific you'd like us to cover that's not already included?
+          <p className="mt-1 text-sm text-gray-500">
+            {plan?.totalDays ?? 46} modules across 5 stages
           </p>
         </div>
 
-        <div className="space-y-3">
-          {topics.map((topic, index) => (
-            <div key={index} className="flex items-center gap-2">
-              <input
-                type="text"
-                value={topic}
-                onChange={(e) => updateTopic(index, e.target.value)}
-                placeholder="e.g. AI in contract negotiations"
-                maxLength={200}
-                className="flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-              {topics.length > 1 && (
-                <button
-                  onClick={() => removeTopic(index)}
-                  className="rounded-md p-1.5 text-gray-400 hover:text-red-500"
-                  aria-label="Remove"
-                >
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              )}
-            </div>
-          ))}
+        {/* Plan summary */}
+        {plan && (
+          <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 space-y-2">
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Your learning path</p>
+            {plan.stages.map((stage) => (
+              <div key={stage.stageNumber} className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">
+                <span className="text-sm text-gray-700">
+                  {STAGE_LABELS[stage.stageNumber] ?? `Stage ${stage.stageNumber}`}
+                </span>
+                <span className="text-xs text-gray-400">{stage.totalModules} modules</span>
+              </div>
+            ))}
+          </div>
+        )}
 
-          {topics.length < 5 && (
-            <button
-              onClick={addField}
-              className="text-sm text-blue-600 hover:text-blue-500"
-            >
-              + Add another topic
-            </button>
-          )}
+        {/* Topic request section */}
+        <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4">
+          <p className="text-sm font-medium text-gray-900">
+            Anything specific you'd like us to cover that's not already included?
+          </p>
+          <p className="mt-1 text-xs text-gray-500">
+            We'll generate custom modules and add them to the end of your plan.
+          </p>
+
+          <div className="mt-4 space-y-3">
+            {topics.map((topic, index) => (
+              <div key={index} className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={topic}
+                  onChange={(e) => updateTopic(index, e.target.value)}
+                  placeholder="e.g. AI in contract negotiations"
+                  maxLength={200}
+                  className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+                {topics.length > 1 && (
+                  <button
+                    onClick={() => removeTopic(index)}
+                    className="rounded-md p-1.5 text-gray-400 hover:text-red-500"
+                    aria-label="Remove"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            ))}
+
+            {topics.length < 5 && (
+              <button onClick={addField} className="text-sm text-blue-600 hover:text-blue-500">
+                + Add another topic
+              </button>
+            )}
+          </div>
         </div>
 
         {error && (
@@ -115,7 +160,7 @@ export default function TopicRequest() {
             disabled={submitting}
             className="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
           >
-            Skip
+            Skip, start learning
           </button>
           <button
             onClick={handleSubmit}
@@ -125,10 +170,6 @@ export default function TopicRequest() {
             {submitting ? 'Submitting...' : 'Submit'}
           </button>
         </div>
-
-        <p className="mt-4 text-center text-xs text-gray-400">
-          Your topics will be added as extra modules at the end of your plan.
-        </p>
       </div>
     </div>
   )
