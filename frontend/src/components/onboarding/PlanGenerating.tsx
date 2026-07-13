@@ -23,7 +23,7 @@ export default function PlanGenerating() {
         if (status.planStatus === 'active') {
           clearInterval(poll)
           setProfile({ planStatus: 'active', onboardingComplete: true })
-          navigate('/home', { replace: true })
+          navigate('/onboarding/topics', { replace: true })
         } else if (status.planStatus === 'error') {
           clearInterval(poll)
           setError('Plan generation failed. Please retry.')

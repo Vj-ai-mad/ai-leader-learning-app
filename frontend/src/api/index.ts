@@ -77,6 +77,15 @@ export async function getPlanStatus(): Promise<{
   return apiCall('/plan/status')
 }
 
+export async function requestTopic(topic: string): Promise<{
+  contentId: string
+  title: string
+  aiSummary: string
+  message: string
+}> {
+  return apiCall('/plan/request-topic', { method: 'POST', body: JSON.stringify({ topic }) })
+}
+
 // ─── Modules ───────────────────────────────────────────────────────────────
 
 export async function getTodayModule(): Promise<ModuleResponse> {

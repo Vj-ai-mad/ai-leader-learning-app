@@ -19,6 +19,7 @@ export default function ContentTable() {
   const [editing, setEditing] = useState<ContentItem | null>(null)
   const [generating, setGenerating] = useState(false)
   const [previewSummary, setPreviewSummary] = useState('')
+  const [filter, setFilter] = useState<'all' | 'unreviewed'>('all')
 
   useEffect(() => {
     loadItems()
@@ -160,7 +161,17 @@ export default function ContentTable() {
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
-        <p className="text-sm text-gray-500">{items.length} items</p>
+        <div className="flex items-center gap-3">
+          <p className="text-sm text-gray-500">{items.length} items</p>
+          <select
+            value={filter}
+            onChange={(e) => setFilter(e.target.value as 'all' | 'unreviewed')}
+            className="rounded-md border border-gray-300 px-2 py-1 text-xs"
+          >
+            <option value="all">All items</option>
+            <option value="unreviewed">Unreviewed only</option>
+          </select>
+        </div>
         <button onClick={handleNew}
           className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700">
           + Add New
@@ -180,7 +191,7 @@ export default function ContentTable() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {items.map(item => (
+            {items.filter(item => filter === 'all' || !item.reviewedByAdmin).map(item => (
               <tr key={item.contentId} className="hover:bg-gray-50">
                 <td className="px-3 py-2 text-gray-900 max-w-[200px] truncate">{item.title}</td>
                 <td className="px-3 py-2 text-gray-600">{item.stage}</td>

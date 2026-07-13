@@ -12,6 +12,7 @@ import DeepLinkHandler from '@/components/auth/DeepLinkHandler'
 // Onboarding
 import OnboardingForm from '@/components/onboarding/OnboardingForm'
 import PlanGenerating from '@/components/onboarding/PlanGenerating'
+import TopicRequest from '@/components/onboarding/TopicRequest'
 
 // App screens
 import HomeScreen from '@/components/home/HomeScreen'
@@ -78,6 +79,7 @@ export default function App() {
           {/* Onboarding (auth required, plan not yet required) */}
           <Route path="/onboarding"            element={<OnboardingForm />} />
           <Route path="/onboarding/generating" element={<PlanGenerating />} />
+          <Route path="/onboarding/topics"     element={<TopicRequest />} />
 
           {/* Protected app routes */}
           <Route path="/home"             element={<AuthGate><HomeScreen /></AuthGate>} />

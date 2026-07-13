@@ -76,6 +76,12 @@ export class ApiStack extends cdk.Stack {
     props.contentTable.grantReadData(generatePlanFn)
     generatePlanFn.addToRolePolicy(new iam.PolicyStatement({ actions: ['bedrock:InvokeModel'], resources: ['*'] }))
     submitOnboardingFn.addEnvironment('GENERATE_PLAN_FN', generatePlanFn.functionName)
+
+    const requestTopicFn = new NodejsFunction(this, 'RequestTopicFn', { ...nodejsProps, entry: path.join(functionsRoot, 'plan/requestTopic.ts'), timeout: cdk.Duration.seconds(30) })
+    props.usersTable.grantReadData(requestTopicFn)
+    props.plansTable.grantReadWriteData(requestTopicFn)
+    props.contentTable.grantReadWriteData(requestTopicFn)
+    requestTopicFn.addToRolePolicy(new iam.PolicyStatement({ actions: ['bedrock:InvokeModel'], resources: ['*'] }))
     generatePlanFn.grantInvoke(submitOnboardingFn)
 
     const getModuleFn = new NodejsFunction(this, 'GetModuleFn', { ...nodejsProps, entry: path.join(functionsRoot, 'module/getModule.ts') })
@@ -109,6 +115,7 @@ export class ApiStack extends cdk.Stack {
     httpApi.addRoutes({ path: '/auth/deeplink/exchange', methods: [apigwv2.HttpMethod.POST], integration: new apigwv2Int.HttpLambdaIntegration('DeepLinkExchange', deepLinkExchangeFn) })
     httpApi.addRoutes({ path: '/onboarding', methods: [apigwv2.HttpMethod.POST], integration: new apigwv2Int.HttpLambdaIntegration('SubmitOnboarding', submitOnboardingFn), authorizer: jwtAuth })
     httpApi.addRoutes({ path: '/plan/status', methods: [apigwv2.HttpMethod.GET], integration: new apigwv2Int.HttpLambdaIntegration('PlanStatus', generatePlanFn), authorizer: jwtAuth })
+    httpApi.addRoutes({ path: '/plan/request-topic', methods: [apigwv2.HttpMethod.POST], integration: new apigwv2Int.HttpLambdaIntegration('RequestTopic', requestTopicFn), authorizer: jwtAuth })
     httpApi.addRoutes({ path: '/module/today', methods: [apigwv2.HttpMethod.GET], integration: new apigwv2Int.HttpLambdaIntegration('GetModuleToday', getModuleFn), authorizer: jwtAuth })
     httpApi.addRoutes({ path: '/module/{dayIndex}', methods: [apigwv2.HttpMethod.GET], integration: new apigwv2Int.HttpLambdaIntegration('GetModule', getModuleFn), authorizer: jwtAuth })
     httpApi.addRoutes({ path: '/module/{dayIndex}/complete', methods: [apigwv2.HttpMethod.POST], integration: new apigwv2Int.HttpLambdaIntegration('CompleteModule', completeModuleFn), authorizer: jwtAuth })
