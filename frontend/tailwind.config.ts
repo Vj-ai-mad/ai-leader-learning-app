@@ -8,6 +8,18 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        brand: {
+          50:  '#eef0f8',
+          100: '#d5d9ef',
+          200: '#a8b0d9',
+          300: '#6b78b8',
+          400: '#3d4db7',
+          500: '#2e3d9f',
+          600: '#232e6e',
+          700: '#1a1a2e',
+          800: '#121220',
+          900: '#0a0a15'
+        },
         navy: {
           50:  '#eef0f8',
           100: '#d5d9ef',
