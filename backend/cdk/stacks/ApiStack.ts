@@ -41,7 +41,7 @@ export class ApiStack extends cdk.Stack {
     }
 
     const nodejsProps = {
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       environment: commonEnv,
       bundling: { minify: true, sourceMap: true }
     }

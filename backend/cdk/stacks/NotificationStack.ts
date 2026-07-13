@@ -26,7 +26,7 @@ export class NotificationStack extends cdk.Stack {
 
     // ── sendDaily Lambda ───────────────────────────────────────────────────
     const sendDailyFn = new lambda.Function(this, 'SendDailyFn', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'sendDaily.handler',
       code: lambda.Code.fromAsset(
         path.join(__dirname, '../../functions/notifications')
@@ -45,7 +45,7 @@ export class NotificationStack extends cdk.Stack {
 
     // ── sendWeeklyRecap Lambda ─────────────────────────────────────────────
     const sendWeeklyFn = new lambda.Function(this, 'SendWeeklyFn', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'sendWeeklyRecap.handler',
       code: lambda.Code.fromAsset(
         path.join(__dirname, '../../functions/notifications')

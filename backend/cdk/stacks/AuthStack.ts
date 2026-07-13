@@ -18,7 +18,7 @@ export class AuthStack extends cdk.Stack {
 
     // ── Pre Sign-up Lambda ─────────────────────────────────────────────────
     const preSignUpFn = new lambda.Function(this, 'PreSignUpFn', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'preSignUp.handler',
       code: lambda.Code.fromAsset(
         path.join(__dirname, '../../functions/auth')
