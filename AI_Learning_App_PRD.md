@@ -1,8 +1,25 @@
-# Product Requirements Document
+# Product Requirements Document (SUPERSEDED)
 ## AI Learning App for Delivery Leaders — Tester Phase (MVP)
 
+> **⚠️ THIS DOCUMENT IS SUPERSEDED**
+>
+> This was the original v0.1 PRD draft. The authoritative requirements are now in:
+> - **requirements.md** (v0.4) — Full functional and non-functional requirements
+> - **design.md** (v0.3) — Architecture, tech stack, data model, API design
+> - **tasks.md** (v0.3) — Implementation tasks with completion status (91% done)
+>
+> **Key changes since this PRD:**
+> - App renamed to **"Helm."**
+> - Roles expanded from 4 to **10 + Other** (free-text)
+> - Auth changed from OTP to **password-based** (Cognito email unreliable in ap-south-1)
+> - AI switched from **AWS Bedrock to Anthropic API direct** (AISPL/RBI payment block)
+> - Content library: **55 modules** (46 generic + 9 role-specific)
+> - **Topic request feature** added (users can request up to 5 custom topics)
+> - Plan generation guarantees **ALL 46 generic modules** for every user
+> - Deployed and live at: https://master.d1domee0zrh3fl.amplifyapp.com
+
 **Owner:** Vijayakumar J
-**Version:** 0.1 (Draft for tester rollout)
+**Version:** 0.1 (Original draft — see requirements.md for current)
 **Date:** July 2026
 
 ---
