@@ -74,25 +74,46 @@ export async function handler(event: unknown): Promise<APIGatewayProxyResultV2 |
       orderedIds = getDeterministicOrder(allItems, user.role ?? 'General')
     }
 
-    // 4. Build plan using ordered IDs and pre-existing aiSummary
+    // 4. Build plan: ALWAYS include all generic modules (stages 1-5), then add role-specific extras
     const itemMap = new Map(allItems.map(i => [i.contentId, i]))
-    const planItems = orderedIds
-      .map(id => itemMap.get(id))
-      .filter((item): item is ContentItem => !!item)
+    
+    // Separate generic (mod-01 to mod-46) from role-specific (mod-47+)
+    const genericItems = allItems.filter(i => !i.contentId.startsWith('user-') && parseInt(i.contentId.replace('mod-', ''), 10) <= 46)
+    const roleSpecificItems = allItems.filter(i => !i.contentId.startsWith('user-') && parseInt(i.contentId.replace('mod-', ''), 10) > 46)
 
-    if (planItems.length < 42) {
-      // Bedrock returned fewer items — pad with remaining items
-      const usedIds = new Set(orderedIds)
-      const remaining = allItems
-        .filter(i => !usedIds.has(i.contentId))
-        .sort((a, b) => a.stage - b.stage)
-      planItems.push(...remaining.slice(0, 56 - planItems.length))
+    // Order generic items (personalized or deterministic)
+    let orderedGenericIds: string[]
+    const genericIds = new Set(genericItems.map(i => i.contentId))
+    
+    if (orderedIds.length > 0) {
+      // Use personalized order but ensure ALL generic items are included
+      orderedGenericIds = orderedIds.filter(id => genericIds.has(id))
+      // Add any generic items that Anthropic missed
+      for (const item of genericItems) {
+        if (!orderedGenericIds.includes(item.contentId)) {
+          orderedGenericIds.push(item.contentId)
+        }
+      }
+    } else {
+      orderedGenericIds = genericItems.sort((a, b) => a.stage - b.stage).map(i => i.contentId)
     }
+
+    // Build plan: all generic first, then role-specific extras appended at end
+    const userRole = (user.role as string) ?? 'General'
+    const relevantRoleModules = roleSpecificItems.filter(i => {
+      const relevance = Array.isArray(i.roleRelevance) ? i.roleRelevance : Array.from(i.roleRelevance as Set<string>)
+      return relevance.includes(userRole) || relevance.includes('General')
+    })
+
+    const planItems: ContentItem[] = [
+      ...orderedGenericIds.map(id => itemMap.get(id)!).filter(Boolean),
+      ...relevantRoleModules.sort((a, b) => a.stage - b.stage)
+    ]
 
     const planId = randomUUID()
     const now = new Date().toISOString()
 
-    const days = planItems.slice(0, 56).map((item, i) => ({
+    const days = planItems.map((item, i) => ({
       dayIndex: i,
       stageNumber: item.stage,
       contentId: item.contentId,
