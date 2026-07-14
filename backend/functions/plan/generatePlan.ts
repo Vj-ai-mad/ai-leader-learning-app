@@ -1,14 +1,12 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda'
 import { GetCommand, PutCommand, UpdateCommand, ScanCommand } from '@aws-sdk/lib-dynamodb'
-import { InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
 import { docClient } from '../shared/dynamodb'
-import { bedrockClient } from '../shared/bedrock'
+import { getAnthropicClient, MODEL } from '../shared/anthropic'
 import { randomUUID } from 'crypto'
 
 const USERS_TABLE = process.env.USERS_TABLE ?? 'ai-leader-users'
 const PLANS_TABLE = process.env.PLANS_TABLE ?? 'ai-leader-plans'
 const CONTENT_TABLE = process.env.CONTENT_TABLE ?? 'ai-leader-content'
-const MODEL_ID = process.env.BEDROCK_MODEL_ID ?? 'us.anthropic.claude-haiku-4-5-20251001-v1:0'
 
 interface ContentItem {
   contentId: string
@@ -123,7 +121,7 @@ export async function handler(event: unknown): Promise<APIGatewayProxyResultV2 |
   }
 }
 
-// ── Personalized ordering via Bedrock (lightweight call) ───────────────────
+// ── Personalized ordering via Anthropic API (lightweight call) ──────────────
 
 async function getPersonalizedOrder(user: Record<string, unknown>, items: ContentItem[]): Promise<string[]> {
   const itemList = items.map(i => ({
@@ -150,19 +148,14 @@ Instructions:
 - Include ALL items — do not skip any
 - Return nothing else, just the JSON array of IDs`
 
-  const response = await bedrockClient.send(new InvokeModelCommand({
-    modelId: MODEL_ID,
-    contentType: 'application/json',
-    accept: 'application/json',
-    body: JSON.stringify({
-      anthropic_version: 'bedrock-2023-05-31',
-      max_tokens: 2048,
-      messages: [{ role: 'user', content: prompt }]
-    })
-  }))
+  const client = await getAnthropicClient()
+  const response = await client.messages.create({
+    model: MODEL,
+    max_tokens: 2048,
+    messages: [{ role: 'user', content: prompt }]
+  })
 
-  const body = JSON.parse(new TextDecoder().decode(response.body))
-  const text = body.content?.[0]?.text ?? ''
+  const text = response.content[0].type === 'text' ? response.content[0].text : ''
 
   const match = text.match(/\[[\s\S]*\]/)
   if (!match) throw new Error('No JSON array in response')

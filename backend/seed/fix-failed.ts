@@ -4,14 +4,13 @@
  */
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import { DynamoDBDocumentClient, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
-import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
+import Anthropic from '@anthropic-ai/sdk'
 
 const CONTENT_TABLE = process.env.CONTENT_TABLE ?? 'ai-leader-content'
-const BEDROCK_REGION = process.env.BEDROCK_REGION ?? 'us-east-1'
-const MODEL_ID = 'us.anthropic.claude-haiku-4-5-20251001-v1:0'
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({ region: 'ap-south-1' }))
-const bedrock = new BedrockRuntimeClient({ region: BEDROCK_REGION })
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY ?? '' })
+const MODEL = 'claude-haiku-4-5-20251001'
 
 async function fix() {
   // Find all items with failed content
@@ -37,19 +36,13 @@ async function fix() {
     console.log(`  Fixing: ${item.contentId} - ${item.title}`)
 
     try {
-      const response = await bedrock.send(new InvokeModelCommand({
-        modelId: MODEL_ID,
-        contentType: 'application/json',
-        accept: 'application/json',
-        body: JSON.stringify({
-          anthropic_version: 'bedrock-2023-05-31',
-          max_tokens: 1024,
-          messages: [{ role: 'user', content: prompt }]
-        })
-      }))
+      const response = await anthropic.messages.create({
+        model: MODEL,
+        max_tokens: 1024,
+        messages: [{ role: 'user', content: prompt }]
+      })
 
-      const body = JSON.parse(new TextDecoder().decode(response.body))
-      const aiSummary = body.content?.[0]?.text ?? ''
+      const aiSummary = response.content[0].type === 'text' ? response.content[0].text : ''
 
       await ddb.send(new UpdateCommand({
         TableName: CONTENT_TABLE,

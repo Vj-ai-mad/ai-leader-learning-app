@@ -1,14 +1,13 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda'
 import { GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
-import { InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
 import { docClient } from '../shared/dynamodb'
-import { bedrockClient } from '../shared/bedrock'
+import { getAnthropicClient, MODEL } from '../shared/anthropic'
 import { randomUUID } from 'crypto'
 
 const USERS_TABLE = process.env.USERS_TABLE ?? 'ai-leader-users'
 const PLANS_TABLE = process.env.PLANS_TABLE ?? 'ai-leader-plans'
 const CONTENT_TABLE = process.env.CONTENT_TABLE ?? 'ai-leader-content'
-const MODEL_ID = process.env.BEDROCK_MODEL_ID ?? 'us.anthropic.claude-haiku-4-5-20251001-v1:0'
+const MAX_TOPIC_REQUESTS_PER_USER = 5
 
 interface GeneratedModule {
   title: string
@@ -47,6 +46,12 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
     }))
     const user = userResult.Item
     if (!user) return res(404, { error: 'User not found' })
+
+    // Enforce per-user cap
+    const topicRequestCount = (user.topicRequestCount as number) ?? 0
+    if (topicRequestCount >= MAX_TOPIC_REQUESTS_PER_USER) {
+      return res(429, { error: `Maximum of ${MAX_TOPIC_REQUESTS_PER_USER} topic requests reached.` })
+    }
 
     const role = user.role ?? 'Delivery Manager'
 
@@ -104,8 +109,8 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
           await docClient.send(new UpdateCommand({
             TableName: USERS_TABLE,
             Key: { userId },
-            UpdateExpression: 'SET totalDays = :total, updatedAt = :now',
-            ExpressionAttributeValues: { ':total': newDayIndex + 1, ':now': now }
+            UpdateExpression: 'SET totalDays = :total, updatedAt = :now, topicRequestCount = if_not_exists(topicRequestCount, :zero) + :one',
+            ExpressionAttributeValues: { ':total': newDayIndex + 1, ':now': now, ':zero': 0, ':one': 1 }
           }))
         }
       }
@@ -141,19 +146,14 @@ Return ONLY valid JSON array (no other text):
 [{"title": "Clean Title Here", "lesson": "Full 300-500 word lesson text here..."}]`
 
   try {
-    const response = await bedrockClient.send(new InvokeModelCommand({
-      modelId: MODEL_ID,
-      contentType: 'application/json',
-      accept: 'application/json',
-      body: JSON.stringify({
-        anthropic_version: 'bedrock-2023-05-31',
-        max_tokens: 4096,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    }))
+    const client = await getAnthropicClient()
+    const response = await client.messages.create({
+      model: MODEL,
+      max_tokens: 4096,
+      messages: [{ role: 'user', content: prompt }]
+    })
 
-    const responseBody = JSON.parse(new TextDecoder().decode(response.body))
-    const text = responseBody.content?.[0]?.text ?? ''
+    const text = response.content[0].type === 'text' ? response.content[0].text : ''
 
     const match = text.match(/\[[\s\S]*\]/)
     if (!match) throw new Error('No JSON array in response')
@@ -161,10 +161,9 @@ Return ONLY valid JSON array (no other text):
     const parsed: GeneratedModule[] = JSON.parse(match[0])
     if (!Array.isArray(parsed) || parsed.length === 0) throw new Error('Empty result')
 
-    return parsed.slice(0, 4) // Max 4 modules per request
+    return parsed.slice(0, 4)
   } catch (err) {
-    console.error('[requestTopic] Bedrock generation failed:', err)
-    // Fallback: create a single module with a cleaned-up title
+    console.error('[requestTopic] Anthropic generation failed:', err)
     const cleanTitle = rawInput.charAt(0).toUpperCase() + rawInput.slice(1).replace(/\s+/g, ' ').trim()
     return [{
       title: cleanTitle.length > 60 ? cleanTitle.slice(0, 57) + '...' : cleanTitle,

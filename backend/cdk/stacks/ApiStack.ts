@@ -74,14 +74,16 @@ export class ApiStack extends cdk.Stack {
     props.usersTable.grantReadWriteData(generatePlanFn)
     props.plansTable.grantReadWriteData(generatePlanFn)
     props.contentTable.grantReadData(generatePlanFn)
-    generatePlanFn.addToRolePolicy(new iam.PolicyStatement({ actions: ['bedrock:InvokeModel', 'aws-marketplace:ViewSubscriptions', 'aws-marketplace:Subscribe'], resources: ['*'] }))
+    generatePlanFn.addToRolePolicy(new iam.PolicyStatement({ actions: ['secretsmanager:GetSecretValue'], resources: ['*'] }))
+    generatePlanFn.addEnvironment('ANTHROPIC_SECRET_NAME', 'anthropic/api-key')
     submitOnboardingFn.addEnvironment('GENERATE_PLAN_FN', generatePlanFn.functionName)
 
     const requestTopicFn = new NodejsFunction(this, 'RequestTopicFn', { ...nodejsProps, entry: path.join(functionsRoot, 'plan/requestTopic.ts'), timeout: cdk.Duration.seconds(60) })
     props.usersTable.grantReadWriteData(requestTopicFn)
     props.plansTable.grantReadWriteData(requestTopicFn)
     props.contentTable.grantReadWriteData(requestTopicFn)
-    requestTopicFn.addToRolePolicy(new iam.PolicyStatement({ actions: ['bedrock:InvokeModel', 'aws-marketplace:ViewSubscriptions', 'aws-marketplace:Subscribe'], resources: ['*'] }))
+    requestTopicFn.addToRolePolicy(new iam.PolicyStatement({ actions: ['secretsmanager:GetSecretValue'], resources: ['*'] }))
+    requestTopicFn.addEnvironment('ANTHROPIC_SECRET_NAME', 'anthropic/api-key')
     generatePlanFn.grantInvoke(submitOnboardingFn)
 
     const getModuleFn = new NodejsFunction(this, 'GetModuleFn', { ...nodejsProps, entry: path.join(functionsRoot, 'module/getModule.ts') })
