@@ -24,13 +24,14 @@ param(
 # Phone must be E.164 format: +91 followed by 10 digits
 # ============================================================
 $TestUsers = @(
-    @{ Email = "tester1@example.com"; Password = "Test1234!"; Name = "Tester One"; Phone = "+919876543210" },
-    @{ Email = "tester2@example.com"; Password = "Test1234!"; Name = "Tester Two"; Phone = "+919876543211" },
-    @{ Email = "tester3@example.com"; Password = "Test1234!"; Name = "Tester Three"; Phone = "+919876543212" },
-    @{ Email = "tester4@example.com"; Password = "Test1234!"; Name = "Tester Four"; Phone = "+919876543213" },
-    @{ Email = "tester5@example.com"; Password = "Test1234!"; Name = "Tester Five"; Phone = "+919876543214" }
-    # Add more like:
-    # @{ Email = "real.person@company.com"; Password = "HelmTest2026!"; Name = "Real Person"; Phone = "+919012345678" }
+    @{ Email = "divyasudhakar@gmail.com"; Password = "Test1234!"; Name = "Divya Mahesh"; Phone = "+919940085042" },
+    @{ Email = "suja.ananth999@gmail.com"; Password = "Test1234!"; Name = "Suja Ananthachari"; Phone = "+919840908137" },
+    @{ Email = "arvind.moorthy@gmail.com"; Password = "Test1234!"; Name = "Arvind Moorthy"; Phone = "+919600003512" },
+    @{ Email = "dollsun@gmail.com"; Password = "Test1234!"; Name = "Sudara Kuppusamy"; Phone = "+919840140549" },
+    @{ Email = "eeejasper@gmail.com"; Password = "Test1234!"; Name = "Jasper S"; Phone = "+919840305812" },
+    @{ Email = "arunv@gmail.com"; Password = "Test1234!"; Name = "Arunkumar V"; Phone = "+919940077543" },
+    @{ Email = "Rajkumars1971@gmail.com"; Password = "Test1234!"; Name = "Rajkumar"; Phone = "+919790929293" },
+    @{ Email = "balamurali.s01@gmail.com"; Password = "Test1234!"; Name = "Balamurali S"; Phone = "+919962561802" }
 )
 # ============================================================
 
@@ -41,6 +42,7 @@ Write-Host "Creating $($TestUsers.Count) user(s)...`n"
 
 $created = 0
 $skipped = 0
+$tempFile = Join-Path $PSScriptRoot "temp-item.json"
 
 foreach ($user in $TestUsers) {
     $email = $user.Email
@@ -50,13 +52,18 @@ foreach ($user in $TestUsers) {
 
     Write-Host "--- $email ($phone) ---" -ForegroundColor Yellow
 
-    # Step 1: Add to AllowList DynamoDB table
+    # Step 1: Add to AllowList DynamoDB table (using file to avoid JSON escaping issues)
     Write-Host "  [1] Adding to AllowList..."
-    aws dynamodb put-item `
-        --table-name $AllowListTable `
-        --region $Region `
-        --item "{`"value`":{`"S`":`"$email`"},`"type`":{`"S`":`"email`"},`"name`":{`"S`":`"$name`"},`"phone`":{`"S`":`"$phone`"},`"addedAt`":{`"S`":`"$(Get-Date -Format o)`"},`"addedBy`":{`"S`":`"admin-script`"}}" `
-        2>$null
+    $itemJson = @{
+        value = @{ S = $email }
+        type = @{ S = "email" }
+        name = @{ S = $name }
+        phone = @{ S = $phone }
+        addedAt = @{ S = (Get-Date -Format o) }
+        addedBy = @{ S = "admin-script" }
+    } | ConvertTo-Json -Compress
+    [System.IO.File]::WriteAllText($tempFile, $itemJson)
+    aws dynamodb put-item --table-name $AllowListTable --region $Region --item file://$tempFile 2>$null
 
     # Step 2: Create user in Cognito with phone_number
     Write-Host "  [2] Creating Cognito user..."
@@ -72,7 +79,6 @@ foreach ($user in $TestUsers) {
     if ($LASTEXITCODE -ne 0) {
         if ($result -match "UsernameExistsException") {
             Write-Host "  [!] User already exists - updating phone number" -ForegroundColor DarkYellow
-            # Update phone on existing user
             aws cognito-idp admin-update-user-attributes `
                 --user-pool-id $UserPoolId `
                 --region $Region `
@@ -100,6 +106,9 @@ foreach ($user in $TestUsers) {
 
     Write-Host ""
 }
+
+# Cleanup temp file
+if (Test-Path $tempFile) { Remove-Item $tempFile -Force }
 
 # Summary
 Write-Host "=== Summary ===" -ForegroundColor Cyan
