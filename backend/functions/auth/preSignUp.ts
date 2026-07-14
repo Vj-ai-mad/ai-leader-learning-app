@@ -20,5 +20,10 @@ export async function handler(event: PreSignUpTriggerEvent): Promise<PreSignUpTr
     throw new Error('NotAuthorizedException: This app is invite-only. Contact Vijay to request access.')
   }
 
+  // Auto-confirm user and verify attributes so they can sign in immediately
+  event.response.autoConfirmUser = true
+  event.response.autoVerifyEmail = true
+  event.response.autoVerifyPhone = true
+
   return event
 }
