@@ -1,6 +1,5 @@
-import type { Config } from 'tailwindcss'
-
-const config: Config = {
+/** @type {import('tailwindcss').Config} */
+module.exports = {
   content: [
     './index.html',
     './src/**/*.{js,ts,jsx,tsx}'
@@ -48,11 +47,11 @@ const config: Config = {
           light: '#e7f5ea'
         },
         stage: {
-          1: '#3b82f6', // blue
-          2: '#14b8a6', // teal
-          3: '#8b5cf6', // purple
-          4: '#f97316', // coral/orange
-          5: '#f59e0b'  // amber
+          1: '#3b82f6',
+          2: '#14b8a6',
+          3: '#8b5cf6',
+          4: '#f97316',
+          5: '#f59e0b'
         }
       },
       fontFamily: {
@@ -62,5 +61,3 @@ const config: Config = {
   },
   plugins: []
 }
-
-export default config
