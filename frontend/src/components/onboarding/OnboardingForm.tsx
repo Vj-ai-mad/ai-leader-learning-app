@@ -3,7 +3,18 @@ import { useNavigate } from 'react-router-dom'
 import { submitOnboarding } from '@/api'
 import { useAuthStore } from '@/store/authStore'
 
-const ROLES = ['PM', 'Delivery Manager', 'Platform Lead', 'RTE', 'Other'] as const
+const ROLES = [
+  'Program Manager',
+  'Delivery Manager',
+  'Platform Lead',
+  'RTE / RTM (Release Train Engineer/Manager)',
+  'Production Manager',
+  'Test Manager / QA Manager',
+  'Service Delivery Manager (SDM)',
+  'DevOps Engineer',
+  'SRE',
+  'Other (please specify)'
+] as const
 const TIME_OPTIONS = [10, 15, 20, 25, 30] as const
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const
 
@@ -13,6 +24,7 @@ export default function OnboardingForm() {
 
   const [step, setStep] = useState(1)
   const [role, setRole] = useState('')
+  const [otherRole, setOtherRole] = useState('')
   const [responsibilities, setResponsibilities] = useState('')
   const [careerGoal, setCareerGoal] = useState('')
   const [dailyMinutes, setDailyMinutes] = useState(15)
@@ -27,7 +39,7 @@ export default function OnboardingForm() {
   }
 
   function canProceed(): boolean {
-    if (step === 1) return !!role
+    if (step === 1) return !!role && (role !== 'Other (please specify)' || otherRole.trim().length >= 2)
     if (step === 4) return activeDays.length > 0
     return true
   }
@@ -38,7 +50,7 @@ export default function OnboardingForm() {
 
     try {
       const result = await submitOnboarding({
-        role,
+        role: role === 'Other (please specify)' ? otherRole.trim() : role,
         responsibilities,
         careerGoal,
         dailyMinutes,
@@ -105,6 +117,16 @@ export default function OnboardingForm() {
                 {r}
               </button>
             ))}
+            {role === 'Other (please specify)' && (
+              <input
+                type="text"
+                value={otherRole}
+                onChange={(e) => setOtherRole(e.target.value)}
+                placeholder="Enter your role title"
+                className="mt-2 w-full rounded-md border border-gray-300 px-4 py-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                maxLength={100}
+              />
+            )}
           </div>
         )}
 

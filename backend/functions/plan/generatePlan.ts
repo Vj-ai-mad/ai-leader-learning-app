@@ -131,22 +131,26 @@ async function getPersonalizedOrder(user: Record<string, unknown>, items: Conten
     tags: Array.isArray(i.tags) ? i.tags : Array.from(i.tags as Set<string>)
   }))
 
-  const prompt = `You are sequencing a personalized learning plan for a delivery leader.
+  const prompt = `You are sequencing a personalized learning plan for a delivery leader. The learner's ROLE is the PRIMARY factor for ordering — modules tagged for their specific role should appear earlier within each stage.
 
 Learner profile:
-- Role: ${user.role}
+- Role: ${user.role} (THIS IS THE PRIMARY ORDERING FACTOR)
 - Current responsibilities: ${user.responsibilities || 'Not specified'}
 - 5-year career goal: ${user.careerGoal || 'Not specified'}
 - Daily time: ${user.dailyMinutes} minutes
 
-Content items (JSON):
+Content items (JSON — each has id, title, stage, tags):
 ${JSON.stringify(itemList)}
 
-Instructions:
-- Return ONLY a JSON array of contentId strings in the recommended learning order
-- Maintain stage progression (1->2->3->4->5) but within each stage, prioritize items most relevant to this learner's responsibilities and goals
-- Include ALL items — do not skip any
-- Return nothing else, just the JSON array of IDs`
+Ordering rules (in priority order):
+1. STAGE PROGRESSION: All Stage 1 items first, then Stage 2, then 3, 4, 5
+2. ROLE MATCH (highest priority within a stage): Items whose tags match the learner's role or whose title directly relates to their role come FIRST within that stage. For example, a "Test Manager" should see testing-related modules before general ones; a "DevOps Engineer" should see observability/incident modules before estimation modules.
+3. RESPONSIBILITIES/GOALS MATCH: Among remaining items in a stage, prioritize those most relevant to the stated responsibilities and career goal.
+4. If the role is not a standard predefined role (e.g. a free-text "Other" entry), weight the responsibilities and career goal text MORE heavily for ordering since there's no role tag to match against.
+
+Two testers with different roles but similar responsibilities MUST get visibly different module ordering within each stage.
+
+Return ONLY a JSON array of contentId strings. No other text.`
 
   const client = await getAnthropicClient()
   const response = await client.messages.create({
