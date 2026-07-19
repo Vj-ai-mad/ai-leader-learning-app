@@ -1,0 +1,114 @@
+{
+  "Items": [
+    {
+      "addedAt": {
+        "S": "2026-07-12T00:00:00Z"
+      },
+      "value": {
+        "S": "jvijay79@yahoo.com"
+      },
+      "note": {
+        "S": "test user"
+      },
+      "addedBy": {
+        "S": "admin"
+      },
+      "type": {
+        "S": "email"
+      }
+    },
+    {
+      "value": {
+        "S": "Rajkumars1971@gmail.com"
+      },
+      "type": {
+        "S": "email"
+      }
+    },
+    {
+      "value": {
+        "S": "arvind.moorthy@gmail.com"
+      },
+      "type": {
+        "S": "email"
+      }
+    },
+    {
+      "value": {
+        "S": "arunv@gmail.com"
+      },
+      "type": {
+        "S": "email"
+      }
+    },
+    {
+      "value": {
+        "S": "suja.ananth999@gmail.com"
+      },
+      "type": {
+        "S": "email"
+      }
+    },
+    {
+      "value": {
+        "S": "eeejasper@gmail.com"
+      },
+      "type": {
+        "S": "email"
+      }
+    },
+    {
+      "value": {
+        "S": "balamurali.s01@gmail.com"
+      },
+      "type": {
+        "S": "email"
+      }
+    },
+    {
+      "value": {
+        "S": "mail2jvijay79@gmail.com"
+      }
+    },
+    {
+      "addedAt": {
+        "S": "2026-07-14T18:02:24.3929093+05:30"
+      },
+      "value": {
+        "S": "archanavj26@gmail.com"
+      },
+      "addedBy": {
+        "S": "admin-script"
+      },
+      "name": {
+        "S": "Archana Kameswaran"
+      },
+      "phone": {
+        "S": "+919176644780"
+      },
+      "type": {
+        "S": "email"
+      }
+    },
+    {
+      "value": {
+        "S": "dollsun@gmail.com"
+      },
+      "type": {
+        "S": "email"
+      }
+    },
+    {
+      "name": {
+        "S": "Divya Mahesh"
+      },
+      "value": {
+        "S": "divyasudhakar@gmail.com"
+      },
+      "type": {
+        "S": "email"
+      }
+    }
+  ],
+  "Count": 11
+}
